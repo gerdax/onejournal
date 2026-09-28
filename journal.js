@@ -27,8 +27,14 @@
   function toast(text) {
     document.querySelector('.journal-toast')?.remove(); clearTimeout(toastTimer);
     const node = el('div', text, 'journal-toast'); node.setAttribute('role', 'status'); document.body.append(node);
+    if (typeof node.showPopover === 'function') { node.setAttribute('popover', 'manual'); node.showPopover(); }
     toastTimer = setTimeout(() => node.remove(), 6000);
   }
+  document.addEventListener('toggle', event => {
+    if (event.target.tagName !== 'DIALOG' || event.newState !== 'open') return;
+    const node = document.querySelector('.journal-toast');
+    if (node?.matches(':popover-open')) { node.hidePopover(); node.showPopover(); }
+  }, true);
   function die(face, ignored, feat) {
     const node = el('span', null, ignored ? 'journal-die is-ignored' : 'journal-die');
     const label = feat ? DiceRules.featLabel(face) : String(face);
@@ -116,6 +122,6 @@
     }
     render();
   });
-  window.OneJournalRolls = { prepare, capture, publish, isPending: id => pending.some(entry => entry.id === id) };
+  window.OneJournalRolls = { prepare, capture, publish, notify: toast, isPending: id => pending.some(entry => entry.id === id) };
   render();
 })();

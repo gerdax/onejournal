@@ -80,7 +80,7 @@
       picker = element('<label class="dice-hero-picker">Bohater<select aria-label="Bohater rzucający"></select></label>');
       setup.querySelector('#dice-settings').prepend(picker);
     }
-    picker.hidden = config.actor !== 'hero';
+    picker.hidden = store.access.role === 'player' || config.actor !== 'hero';
     const select = picker.querySelector('select'), prior = select.value;
     select.replaceChildren();
     store.getState().heroes.forEach(hero => { const option = document.createElement('option'); option.value = hero.id; option.textContent = hero.name; select.append(option); });
@@ -291,14 +291,9 @@
       const raw = await pending;
       // Always preserve a settled roll, even when the overlay was closed.
       const rollId = root.OneJournalRolls.capture(prepared, raw);
-      let publication;
-      if (token === generation && dialog.open) {
-        showResult(root.DiceRules.interpretRoll(snapshot, raw));
-        publication = element('<p class="roll-publication" role="status">Publikowanie wyniku…</p>');
-        resultPanel.append(publication);
-      }
-      try { await root.OneJournalRolls.publish(rollId); if (publication) publication.textContent = 'Wynik zapisany w dzienniku.'; }
-      catch (_) { if (publication) publication.textContent = 'Wynik nieopublikowany. Otwórz Dziennik rzutów i ponów publikację.'; }
+      if (token === generation && dialog.open) showResult(root.DiceRules.interpretRoll(snapshot, raw));
+      try { await root.OneJournalRolls.publish(rollId); }
+      catch (_) { root.OneJournalRolls.notify('Wynik nieopublikowany. Otwórz Dziennik rzutów i ponów publikację.'); }
     } catch (error) {
       if (token === generation && dialog.open) showError(`Rzut się nie powiódł: ${error && error.message ? error.message : 'nieznany błąd. Spróbuj ponownie.'}`);
     } finally {

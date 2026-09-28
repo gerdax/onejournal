@@ -11,6 +11,7 @@ const { startFixture } = require('./fixture-server.cjs');
     await page.locator('main').waitFor({state:'visible'});
     await page.locator('.dice-launch').click();
     assert.equal(await page.locator('[data-choice="actor"]').isVisible(),false);
+    assert.equal(await page.locator('.dice-hero-picker').isVisible(),false);
     // Use the real vendored physics engine once, then deterministic values to
     // reproduce a successful simulation whose network publication fails.
     await page.locator('.dice-roll').click();
@@ -24,7 +25,9 @@ const { startFixture } = require('./fixture-server.cjs');
     const uid=await page.evaluate(()=>JSON.parse(sessionStorage.getItem(Object.keys(sessionStorage).find(k=>k.startsWith('onejournal:auth:')))).access_token);
     fixture.setOffline(uid,true);
     await page.locator('.dice-roll').click();
-    await page.locator('.roll-publication').filter({hasText:'nieopublikowany'}).waitFor();
+    await page.locator('.journal-toast').filter({hasText:'nieopublikowany'}).waitFor();
+    assert.equal(await page.locator('.roll-publication').count(),0);
+    assert.equal(await page.locator('.journal-toast').evaluate(e=>e.matches(':popover-open')),true);
     assert.equal(fixture.document.rolls.length,1);
     await page.locator('.dice-close').click();
     fixture.setOffline(uid,false);await page.evaluate(()=>window.OneRingStore.refresh());
