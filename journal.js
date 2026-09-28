@@ -22,7 +22,7 @@
     if (result.automaticSuccess) return 'automatyczny sukces';
     return result.passed === true ? 'sukces' : result.passed === false ? 'porażka' : 'bez PT';
   }
-  function title(entry) { return (entry.authorRole === 'gm' && entry.actor === 'hero' ? 'MG za ' : '') + (entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Wróg · prywatny rzut MG' : 'Bohater')); }
+  function title(entry) { return (entry.authorRole === 'gm' && entry.actor === 'hero' && entry.heroId ? 'MG za ' : '') + (entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Wróg · prywatny rzut MG' : 'Bohater')); }
   function resultSuffix(result) {
     const interpretation = verdict(result);
     return `${result.target == null ? '' : '/' + result.target}${interpretation === 'bez PT' ? '' : ' — ' + interpretation} · znaki sukcesu: ${result.marks}`;
@@ -111,7 +111,8 @@
       if (config.actor !== 'hero') throw new Error('Gracz może rzucać tylko swoim bohaterem.');
       heroId = store.access.heroId;
     }
-    if (config.actor === 'hero' && !store.getState().heroes.some(h => h.id === heroId)) throw new Error('Wybierz bohatera dla rzutu.');
+    if (store.access.role === 'player' && !store.getState().heroes.some(h => h.id === heroId)) throw new Error('Brak przypisanego bohatera.');
+    if (store.access.role === 'gm') heroId = null;
     return { id: crypto.randomUUID(), heroId: config.actor === 'hero' ? heroId : null, config: { ...config } };
   }
   function capture(prepared, raw) {

@@ -15,7 +15,7 @@ const storageFor = state => {
   return { getItem: key => key === "one-ring-state" ? saved : null, setItem: (key, value) => { if (key === "one-ring-state") saved = value; } };
 };
 const cleanConfig = config => {
-  if (!isObject(config) || !["hero", "enemy"].includes(config.actor)) fail(400, "Nieprawidłowy rzut.");
+  if (!isObject(config) || !["hero", "npc", "enemy"].includes(config.actor)) fail(400, "Nieprawidłowy rzut.");
   if (!Number.isInteger(config.baseDice) || config.baseDice < 0 || config.baseDice > 6 || !Number.isInteger(config.bonus) || config.bonus < -6 || config.bonus > 6) fail(400, "Nieprawidłowa pula kości.");
   if (!["normal", "favoured", "weary"].includes(config.featMode)) fail(400, "Nieprawidłowy tryb kości.");
   let target = config.target;
@@ -77,16 +77,19 @@ function restoredRolls(raw, uid) {
     seen.add(item.id);
     const config = cleanConfig(item.config);
     const heroId = config.actor === "hero" && typeof item.heroId === "string" && item.heroId.length <= 100 ? item.heroId : null;
-    if (config.actor === "hero" && !heroId) fail(400, "Nieprawidłowy bohater w dzienniku.");
-    const heroName = typeof item.heroName === "string" && item.heroName.length <= 200 ? item.heroName : null;
+    if (config.actor === "hero" && item.authorRole === "player" && !heroId) fail(400, "Nieprawidłowy bohater w dzienniku.");
+    const historicName = typeof item.heroName === "string" && item.heroName.length <= 200 ? item.heroName :
+      heroId && typeof item.name === "string" && item.name.length <= 200 ? item.name : null;
+    const heroName = heroId ? historicName : null;
     const createdAt = item.createdAt || item.at;
     if (typeof createdAt !== "string" || !Number.isFinite(Date.parse(createdAt))) fail(400, "Nieprawidłowa data rzutu.");
     let result;
     try { result = DiceRules.interpretRoll(config, item.raw); } catch (error) { fail(400, error.message); }
     const rawDice = { feat: item.raw.feat.slice(), success: item.raw.success.slice() };
-    const entry = { id: item.id, heroId, heroName, name: heroName || "Przeciwnik", actor: config.actor,
+    const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? "Przeciwnik" : heroName || "Bohater";
+    const entry = { id: item.id, heroId, heroName, name, actor: config.actor,
       authorRole: item.authorRole, config, raw: rawDice, result, createdAt, at: createdAt };
-    return { id: item.id, uid, payload: JSON.stringify({ restored: entry }), visibility: config.actor === "enemy" ? "private" : "public", entry };
+    return { id: item.id, uid, payload: JSON.stringify({ restored: entry }), visibility: config.actor === "hero" ? "public" : "private", entry };
   });
 }
 function validateMethodInput(method, args, access, doc, heroVersion) {
@@ -209,22 +212,27 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
           if (typeof request.id !== "string" || !/^[\w-]{8,80}$/.test(request.id)) fail(400, "Nieprawidłowe ID rzutu.");
           const config = cleanConfig(request.config);
           if (access.role === "player" && (config.actor !== "hero" || request.heroId !== access.heroId)) fail(403, "Brak uprawnień do rzutu.");
-          if (config.actor === "hero" && (!request.heroId || !doc.state.heroes.some(h => h.id === request.heroId))) fail(400, "Nieznany bohater.");
+          if (access.role === "player" && !doc.state.heroes.some(h => h.id === access.heroId)) fail(403, "Brak dostępu do bohatera.");
+          const heroId = access.role === "player" ? access.heroId : null;
           let interpretation;
           try { interpretation = DiceRules.interpretRoll(config, request.raw); } catch (error) { fail(400, error.message); }
           const rawDice = { feat: request.raw.feat.slice(), success: request.raw.success.slice() };
-          const payload = JSON.stringify({ heroId: request.heroId || null, config, raw: rawDice });
+          // Keep the request's legacy GM heroId in the idempotency key even though
+          // newly stored GM hero rolls are generic and do not bind a sheet.
+          const payloadHeroId = access.role === "player" ? heroId : request.heroId || null;
+          const payload = JSON.stringify({ heroId: payloadHeroId, config, raw: rawDice });
           const prior = doc.rolls.find(r => r.id === request.id);
           if (prior) {
             if (prior.uid !== uid || prior.payload !== payload) fail(409, "ID rzutu jest już użyte.");
             return project(doc, access);
           }
           if (doc.rolls.length >= MAX_ROLLS) fail(409, "Dziennik osiągnął limit 10 000 rzutów. Wyeksportuj kopię przed dalszą grą.");
-          const hero = config.actor === "hero" ? doc.state.heroes.find(h => h.id === request.heroId) : null;
+          const hero = heroId ? doc.state.heroes.find(h => h.id === heroId) : null;
           const createdAt = now();
           const heroName = hero ? hero.name : null;
-          const entry = { id: request.id, heroId: hero ? hero.id : null, heroName, name: heroName || "Przeciwnik", actor: config.actor, authorRole: access.role, config, raw: rawDice, result: interpretation, createdAt, at: createdAt };
-          doc.rolls.push({ id: request.id, uid, payload, visibility: config.actor === "enemy" ? "private" : "public", entry });
+          const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? "Przeciwnik" : heroName || "Bohater";
+          const entry = { id: request.id, heroId, heroName, name, actor: config.actor, authorRole: access.role, config, raw: rawDice, result: interpretation, createdAt, at: createdAt };
+          doc.rolls.push({ id: request.id, uid, payload, visibility: config.actor === "hero" ? "public" : "private", entry });
           publicChange = config.actor === "hero";
         } else fail(400, "Nieznane działanie.");
       }

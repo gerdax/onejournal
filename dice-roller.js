@@ -21,7 +21,7 @@
           <div class="dice-sheet-head"><h2><button type="button" class="dice-collapse" aria-label="Zwiń ustawienia rzutu" aria-expanded="true" aria-controls="dice-settings"><span id="dice-heading">Rzut</span><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button></h2><button type="button" class="dice-close" aria-label="Zamknij rzut">×</button></div>
           <div class="dice-setup">
             <div id="dice-settings" class="dice-settings">
-            <fieldset class="dice-field"><legend>Kto rzuca?</legend><div class="dice-options" data-choice="actor"><button type="button" data-value="hero">Bohater</button><button type="button" data-value="enemy">Wróg</button></div></fieldset>
+            <fieldset class="dice-field"><legend>Kto rzuca?</legend><div class="dice-options" data-choice="actor"><button type="button" data-value="hero">Bohater</button><button type="button" data-value="npc">NPC</button><button type="button" data-value="enemy">Przeciwnik</button></div></fieldset>
             <fieldset class="dice-field"><legend>Kości sukcesu</legend><div class="dice-options dice-counts" data-choice="baseDice"><button type="button" data-value="0">0</button><button type="button" data-value="1">1</button><button type="button" data-value="2">2</button><button type="button" data-value="3">3</button><button type="button" data-value="4">4</button><button type="button" data-value="5">5</button><button type="button" data-value="6">6</button></div></fieldset>
             <fieldset class="dice-field"><legend>Kość działania</legend><div class="dice-options" data-choice="featMode"><button type="button" data-value="weary">Osłabiona</button><button type="button" data-value="normal">Normalna</button><button type="button" data-value="favoured">Wzmocniona</button></div></fieldset>
             <div class="dice-checks"><label><input type="checkbox" data-check="exhausted"> Wyczerpany</label><label class="dice-miserable"><input type="checkbox" data-check="miserable"> Przygnębiony</label></div>
@@ -75,18 +75,6 @@
     const store = root.OneRingStore;
     if (store.access.role === 'player') config.actor = 'hero';
     setup.querySelector('[data-choice="actor"]').closest('fieldset').hidden = store.access.role === 'player';
-    let picker = setup.querySelector('.dice-hero-picker');
-    if (!picker) {
-      picker = element('<label class="dice-hero-picker">Bohater<select aria-label="Bohater rzucający"></select></label>');
-      setup.querySelector('#dice-settings').prepend(picker);
-    }
-    picker.hidden = store.access.role === 'player' || config.actor !== 'hero';
-    const select = picker.querySelector('select'), prior = select.value;
-    select.replaceChildren();
-    store.getState().heroes.forEach(hero => { const option = document.createElement('option'); option.value = hero.id; option.textContent = hero.name; select.append(option); });
-    if (store.getState().heroes.some(hero => hero.id === prior)) select.value = prior;
-    if (store.access.role === 'player') select.value = store.access.heroId;
-    select.disabled = !!pending || store.access.role === 'player';
     dialog.dataset.actor = config.actor;
     setup.querySelectorAll('[data-choice]').forEach(group => {
       const field = group.dataset.choice;
@@ -120,7 +108,7 @@
       if (i >= featCount + pool) die.style.visibility = 'hidden';
       preview.append(die);
     }
-    setup.querySelector('.dice-roll').disabled = !!pending || !store.canWrite || (config.actor === 'hero' && !select.value);
+    setup.querySelector('.dice-roll').disabled = !!pending || !store.canWrite;
     renderCollapse();
   }
 
@@ -162,7 +150,7 @@
     dialog.showModal();
     renderSetup();
     resizeStage();
-    setup.querySelector('[data-choice="actor"] button[aria-pressed="true"]').focus();
+    setup.querySelector(root.OneRingStore.access.role === 'player' ? '[data-choice="baseDice"] button[aria-pressed="true"]' : '[data-choice="actor"] button[aria-pressed="true"]').focus();
   }
 
   function close() {
@@ -275,7 +263,7 @@
     const token = ++generation;
     const snapshot = { ...config };
     let prepared;
-    try { prepared = root.OneJournalRolls.prepare(snapshot, setup.querySelector('.dice-hero-picker select').value); }
+    try { prepared = root.OneJournalRolls.prepare(snapshot); }
     catch (error) { showError(error.message); return; }
     const pool = root.DiceRules.calculatePool(snapshot);
     const button = setup.querySelector('.dice-roll');

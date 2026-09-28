@@ -11,7 +11,7 @@ const { startFixture } = require('./fixture-server.cjs');
     await page.locator('main').waitFor({state:'visible'});
     await page.locator('.dice-launch').click();
     assert.equal(await page.locator('[data-choice="actor"]').isVisible(),false);
-    assert.equal(await page.locator('.dice-hero-picker').isVisible(),false);
+    assert.equal(await page.locator('.dice-hero-picker').count(),0);
     // Use the real vendored physics engine once, then deterministic values to
     // reproduce a successful simulation whose network publication fails.
     await page.locator('.dice-roll').click();

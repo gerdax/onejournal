@@ -8,7 +8,7 @@ MG i gracze otwierają indywidualne linki `#access=…`. Link jest kluczem dost�
 
 - **MG:** Drużyna, Przeciwnicy, Mapa, Ustawienia. Tworzenie, kopiowanie i unieważnianie linków w Ustawieniach. Nowy link odwołuje stare sesje.
 - **Gracz:** własny arkusz i mapa. Edytuje swój arkusz, widzi żetony i wspólne zaznaczenie MG. Nie przesuwa żetonów ani nie widzi cudzych arkuszy i statystyk przeciwników.
-- **Rzuty:** animacja 3D u rzucającego, powiadomienie i historia u pozostałych. Rzuty bohaterów są wspólne, rzuty wrogów prywatne dla MG. Nie odejmują zasobów automatycznie. Wynik oczekujący na publikację można ponowić w Dzienniku bez nowego losowania.
+- **Rzuty:** animacja 3D u rzucającego, powiadomienie i historia u pozostałych. MG wybiera ogólny rzut Bohatera (wspólny), NPC lub Przeciwnika (oba prywatne). NPC używa zasad Bohatera. Tylko gracz rzuca pod imieniem własnej postaci. Nie odejmują zasobów automatycznie. Wynik oczekujący na publikację można ponowić w Dzienniku bez nowego losowania.
 - **Brak internetu:** ostatni widok zostaje; zapisy i nowe rzuty są zablokowane. Szkic wpisany w arkuszu pozostaje w otwartej karcie i można go ponowić po odzyskaniu połączenia. Zamknięcie karty może utracić niezapisany szkic.
 
 Dane wspólnej gry przechowuje Supabase. Kod frontendowy publikuje GitHub Pages. Komputer MG nie musi być włączony. Baza nie jest częścią publicznego repozytorium.

@@ -76,6 +76,60 @@ test('roll interpretation, idempotency and private revision', async () => {
   assert.equal((await f.core.handle('gm', { action: 'snapshot' })).rolls.length, 2);
 });
 
+test('GM generic hero, NPC and enemy rolls need no hero and keep NPC private', async () => {
+  const f = fixture();
+  const base = { actor: 'hero', baseDice: 0, bonus: 0, featMode: 'normal', target: '', hope: false, inspired: false, enemyResource: false, miserable: false, exhausted: false };
+  const heroRoll = { action: 'roll', id: 'gm-hero-0001', heroId: null, config: base, raw: { feat: [12], success: [] } };
+  const generic = await f.core.handle('gm', heroRoll);
+  assert.equal(generic.rolls[0].name, 'Bohater');
+  assert.equal(generic.rolls[0].heroId, null);
+  assert.equal(generic.rolls[0].result.automaticSuccess, true);
+  const publicRevision = f.doc.publicRevision;
+  const npc = await f.core.handle('gm', { action: 'roll', id: 'gm-npc-0001', heroId: null,
+    config: { ...base, actor: 'npc', hope: true, inspired: true }, raw: { feat: [12], success: [1, 2] } });
+  assert.equal(npc.rolls.at(-1).name, 'NPC');
+  assert.equal(npc.rolls.at(-1).actor, 'npc');
+  assert.equal(npc.rolls.at(-1).result.actor, 'hero');
+  assert.equal(npc.rolls.at(-1).result.automaticSuccess, true);
+  assert.equal(f.doc.publicRevision, publicRevision);
+  await f.core.handle('gm', { action: 'roll', id: 'gm-enemy-01', heroId: null,
+    config: { ...base, actor: 'enemy' }, raw: { feat: [11], success: [] } });
+  assert.equal(f.doc.publicRevision, publicRevision);
+  assert.equal((await f.core.handle('gm', heroRoll)).rolls.length, 3);
+  await assert.rejects(f.core.handle('gm', { ...heroRoll, raw: { feat: [9], success: [] } }), { status: 409 });
+  const heroId = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A' }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId });
+  const player = await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  assert.deepEqual(player.rolls.map(roll => roll.id), ['gm-hero-0001']);
+  assert.equal(player.revision, f.doc.publicRevision);
+  await assert.rejects(f.core.handle('p1', { action: 'roll', id: 'player-npc-01', heroId,
+    config: { ...base, actor: 'npc' }, raw: { feat: [12], success: [] } }), { status: 403 });
+  await assert.rejects(f.core.handle('p1', { action: 'roll', id: 'player-enemy', heroId,
+    config: { ...base, actor: 'enemy' }, raw: { feat: [11], success: [] } }), { status: 403 });
+});
+
+test('GM old-client heroId is accepted but new entry is generic; restore keeps historical named rolls', async () => {
+  const f = fixture();
+  const heroId = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'Old Hero' }] })).result.id;
+  const config = { actor: 'hero', baseDice: 0, bonus: 0, featMode: 'normal', target: '', hope: false, inspired: false, enemyResource: false, miserable: false, exhausted: false };
+  const oldClient = { action: 'roll', id: 'gm-legacy-01', heroId, config, raw: { feat: [12], success: [] } };
+  const fresh = await f.core.handle('gm', oldClient);
+  assert.equal(fresh.rolls[0].heroId, null);
+  assert.equal((await f.core.handle('gm', oldClient)).rolls.length, 1);
+  const backup = await f.core.handle('gm', { action: 'export' });
+  backup.rolls.push({ ...backup.rolls[0], id: 'new-npc-01', actor: 'npc', config: { ...config, actor: 'npc' }, name: 'NPC', heroId: null });
+  backup.rolls.push({ ...backup.rolls[0], id: 'historic-01', heroId, heroName: 'Old Hero', name: 'Old Hero', authorRole: 'gm' });
+  await f.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [backup] });
+  const restored = await f.core.handle('gm', { action: 'snapshot' });
+  assert.equal(restored.rolls[0].name, 'Bohater');
+  assert.equal(restored.rolls[1].name, 'NPC');
+  assert.equal(restored.rolls[2].heroId, heroId);
+  assert.equal(restored.rolls[2].name, 'Old Hero');
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId });
+  const player = await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  assert.deepEqual(player.rolls.map(roll => roll.id), ['gm-legacy-01', 'historic-01']);
+});
+
 test('backup wrapper roundtrip and legacy backup restore retain journal semantics', async () => {
   const f = fixture();
   const h = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A' }] })).result.id;
