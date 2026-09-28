@@ -1,6 +1,6 @@
 [hidden] { display: none !important; }
 #connection-status { flex: 1; font-size: 13px; }
-.connection-settings button, .access-screen button, .access-link button, :is(.journal-dialog, .settings-dialog) button:not(.text-button) { padding: 8px 12px; border: 1px solid #b7aa94; border-radius: 6px; background: #fffaf0; color: #29251f; cursor: pointer; }
+.connection-settings button, .access-screen button, .access-link button, :is(.journal-dialog, .settings-dialog) button:not(.text-button, .journal-close) { padding: 8px 12px; border: 1px solid #b7aa94; border-radius: 6px; background: #fffaf0; color: #29251f; cursor: pointer; }
 .access-screen { max-width: 620px; margin: 12vh auto; padding: 24px; }
 body[data-connection="offline"] #connection-status, body[data-connection="revoked"] #connection-status { color: #9b2f20; font-weight: bold; }
 .access-link { margin: 20px 0; padding: 18px; border: 1px solid #cfc6b4; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px; }
