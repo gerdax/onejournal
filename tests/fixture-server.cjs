@@ -1,0 +1,73 @@
+/* Isolated HTTP/Supabase fixture for authenticated browser checks. */
+'use strict';
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { createStore } = require('../state.js');
+const { createServerCore, defaultDocument } = require('../server-core.js');
+
+const root = path.resolve(__dirname, '..');
+const gmSecret = 'fixture-gm-access-secret-00001';
+const playerSecrets = ['fixture-player-access-secret-01', 'fixture-player-access-secret-02'];
+const hash = value => crypto.createHash('sha256').update(value).digest('hex');
+const copy = value => structuredClone(value);
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
+
+async function startFixture() {
+  const storage = { getItem: () => null, setItem: () => {} };
+  const seed = createStore(storage);
+  const heroes = [seed.saveHero({ name: 'Ala', culture: 'Hobbit', hope: 8, maxHope: 10 }), seed.saveHero({ name: 'Bartek', culture: 'Człowiek', hope: 7, maxHope: 9 })];
+  seed.addHero(heroes[0].id);
+  seed.addHero(heroes[1].id);
+  seed.addEnemy({ name: 'Ork Sekretny', kind: 'Ork', tier: 'Standardowy', fierceness: 4, endurance: 16, maxEndurance: 16, might: 1, hate: 4, maxHate: 4, parry: 1, armour: 2, attack: 'Łuk', traits: 'Sekret MG', notes: 'Tajne notatki' });
+  const { generateTerrain } = require('../map.js');
+  seed.setMap(generateTerrain('clearing', 'small', 'online-test'));
+  let doc = defaultDocument();
+  doc.state = seed.getState();
+  for (const [index, secret] of [gmSecret, ...playerSecrets].entries()) doc.links.push({ id: 'fixture-link-' + index, role: index ? 'player' : 'gm', heroId: index ? heroes[index - 1].id : null, secretHash: hash(secret), encryptedSecret: secret, version: 1, active: true });
+  const repository = {
+    get: async () => copy(doc),
+    compareAndSwap: async (expected, next) => { if (doc.revision !== expected) return false; doc = copy(next); return true; }
+  };
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, 'supabase/functions/onejournal/catalog.json'), 'utf8'));
+  const core = createServerCore({ repository, hashSecret: hash, randomSecret: () => 'fixture-random-secret-' + crypto.randomBytes(12).toString('hex'), encryptSecret: value => value, decryptSecret: value => value, catalog });
+  const offline = new Set();
+  let userSequence = 0;
+  const send = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
+  const server = http.createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      if (url.pathname === '/auth/v1/signup' || url.pathname === '/auth/v1/token') {
+        const uid = url.pathname.endsWith('signup') ? 'fixture-user-' + ++userSequence : JSON.parse(await body(req)).refresh_token;
+        return send(res, 200, { access_token: uid, refresh_token: uid, expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600 });
+      }
+      if (url.pathname === '/functions/v1/onejournal') {
+        const uid = String(req.headers.authorization || '').replace(/^Bearer /, '');
+        if (offline.has(uid)) return send(res, 503, { error: 'Fixture offline' });
+        const request = JSON.parse(await body(req));
+        return send(res, 200, await core.handle(uid, request));
+      }
+      if (url.pathname === '/config.js') {
+        res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
+        return res.end(`window.ONEJOURNAL_CONFIG = {supabaseUrl: location.origin, supabaseAnonKey: 'fixture-anon'};`);
+      }
+      if (url.pathname === '/service-worker.js') return send(res, 404, {});
+      const file = path.resolve(root, '.' + decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
+      if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return send(res, 404, {});
+      res.writeHead(200, { 'Content-Type': mime[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+      fs.createReadStream(file).pipe(res);
+    } catch (error) { send(res, error.status || 500, { error: error.message }); }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  return {
+    url: `http://127.0.0.1:${server.address().port}`,
+    secrets: { gm: gmSecret, players: playerSecrets }, heroes,
+    get document() { return copy(doc); },
+    core,
+    setOffline(uid, value) { if (value) offline.add(uid); else offline.delete(uid); },
+    close: () => new Promise(resolve => server.close(resolve))
+  };
+}
+function body(req) { return new Promise((resolve, reject) => { let value = ''; req.on('data', chunk => value += chunk); req.on('end', () => resolve(value)); req.on('error', reject); }); }
+module.exports = { startFixture };

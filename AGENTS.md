@@ -1,27 +1,29 @@
 # Project
 
-Bestiariusz Śródziemia is a Polish, local-first One Ring combat tool for one GM:
-enemy generation/library, active combat, editable hero sheets and a token map.
+onejournal is a Polish shared One Ring game for one GM and players, forked from
+Bestiariusz Śródziemia. Supabase is authoritative; the original app stays separate.
 
 ## Stack
 
-Static HTML, CSS and plain JavaScript; browser script globals, localStorage and
-a service worker. SortableJS is vendored. No package manager, bundler, backend
-or CI configuration is currently declared.
+Static HTML, CSS and plain JavaScript globals with a service worker. SortableJS
+and the 3D dice engine are vendored. Supabase PostgreSQL and an Edge Function
+enforce access. GitHub Actions tests and publishes the frontend to Pages.
 
 ## Commands
 
-- Development: `python3 -m http.server 8765`, then open `http://localhost:8765`.
+- Development: `python3 -m http.server 8877`, then open `http://localhost:8877`.
 - Unit tests: `node --test tests/*.test.js`.
 - JavaScript syntax: `node --check <changed-file.js>`.
-- Browser smoke: `node tests/browser-smoke.cjs` with the server running;
-  requires Playwright and Chrome. See README for environment overrides.
-- No build, lint, formatting or type-check command is configured.
+- Isolated browser tests: `node tests/online.cjs` and `node tests/dice-online.cjs`;
+  require Playwright and Chrome. See README for environment overrides.
+- Frontend build: `node scripts/build-site.mjs`.
+- Backend shared sources: `node scripts/admin-build.mjs` before Edge deployment.
 
 ## Project constraints
 
 - Keep the Polish interface and existing static frontend architecture.
-- Shared persistent operations belong in `state.js`; consult `STATE_API.md`
+- State normalization belongs in `state.js`; asynchronous persistence uses
+  `cloud-store.js` and `supabase-adapter.js`. Consult `STATE_API.md`
   before changing the contract used by combat, heroes and map.
 - Preserve saved data and legacy migration sources. Verify storage/restore
   changes with isolated test storage, never the user's live browser data.

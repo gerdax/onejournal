@@ -1,0 +1,22 @@
+[hidden] { display: none !important; }
+.online-bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #cfc6b4; background: #f4f0e8; flex-wrap: wrap; }
+.online-bar strong { font-family: Fraunces, Georgia, serif; font-size: 24px; }
+#connection-status { flex: 1; font-size: 13px; }
+.online-bar button, .access-screen button, .access-link button, .journal-dialog button { padding: 8px 12px; border: 1px solid #b7aa94; border-radius: 6px; background: #fffaf0; color: #29251f; cursor: pointer; }
+.access-screen { max-width: 620px; margin: 12vh auto; padding: 24px; }
+body[data-connection="offline"] #connection-status, body[data-connection="revoked"] #connection-status { color: #9b2f20; font-weight: bold; }
+.access-link { margin: 20px 0; padding: 18px; border: 1px solid #cfc6b4; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px; }
+.access-link h3 { flex-basis: 100%; margin: 0; }
+.access-link input { min-width: 160px; flex: 1; padding: 8px; }
+.journal-dialog { width: min(600px, 94vw); max-height: 85dvh; padding: 20px; background: #f4f0e8; color: #29251f; border: 1px solid #b7aa94; border-radius: 12px; }
+.journal-dialog::backdrop { background: #19171366; }
+.journal-head { display: flex; align-items: center; justify-content: space-between; }
+.journal-entry { border-top: 1px solid #cfc6b4; padding: 14px 0; }
+.journal-entry h3, .journal-entry p { margin: 4px 0; }
+.journal-entry summary { cursor: pointer; }
+.journal-entry pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.journal-toast { position: fixed; z-index: 100; bottom: 16px; left: 16px; max-width: min(440px, 85vw); background: #29251f; color: #fffaf0; padding: 12px 18px; border-radius: 8px; pointer-events: none; }
+.roll-publication { padding: 8px; border: 1px solid #b7aa94; border-radius: 6px; }
+.dice-hero-picker { display: grid; gap: 6px; margin: 10px 0; }
+.dice-hero-picker select { width: 100%; padding: 8px; }
+@media (max-width: 600px) { .online-bar { gap: 8px; padding: 10px; } .online-bar strong { font-size: 20px; } #connection-status { flex-basis: calc(100% - 130px); } }

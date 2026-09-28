@@ -1,6 +1,38 @@
-# One Ring shared state API
+# onejournal cloud state API
 
-`state.js` exposes a browser singleton as `window.OneRingStore`. In Node, use
+The browser creates `window.OneRingStore` only after successful authentication.
+`state.js` exposes `window.OneRingState.createStore` as the synchronous in-memory
+normalization engine; it never opens browser localStorage. The legacy contract
+below documents this engine. The cloud application uses the async facade in
+`cloud-store.js` and provider transport in `supabase-adapter.js`.
+
+`getState()`, `getParticipants()` and `subscribe(fn)` remain synchronous detached
+reads/notifications. All mutations return Promises and resolve only after server
+confirmation; methods that used to return records retain their result values.
+`saveHero(data, heroVersion?)` carries the draft version, defaulting to the current
+snapshot version. A stale version rejects with HTTP 409 and refreshes server data;
+the editor retains its draft until the user explicitly retries.
+
+Additional properties: `access: {role: 'gm'|'player', heroId}`, `connection`,
+`canWrite`, `heroVersions`, `selection`, `catalog` (GM only), and `rolls`.
+Additional methods: `connect(secret?)`, `refresh()`, `markOffline()`, `stop()`,
+`selectToken(id)`, `listLinks()`, `rotateLink(heroId)`, `revokeLink(heroId)`,
+`publishRoll({id,heroId,config,raw})`. Offline mutations reject without sending.
+
+Player snapshots have empty library/battle arrays and only the assigned hero.
+`getParticipants()` is independent of those arrays: public token fields for
+others, full details for the player's own participating hero. No private enemy
+fields or other hero sheets are sent. Selection follows the GM for every role.
+Public rolls are readable by all active members; enemy rolls only by GM.
+
+Cloud `exportBackup()` resolves to `{format:'onejournal',version:1,state,rolls}`;
+`state` is a version-2 legacy backup. `restoreBackup()` accepts this wrapper or a
+legacy version-2 backup. A wrapper replaces the journal; a legacy import retains
+it. Access links and authentication are not part of a gameplay backup.
+
+## Legacy in-memory normalization engine
+
+The legacy synchronous engine is available in Node using
 `const { createStore } = require('./state.js')`. `createStore(storage)` accepts a
 localStorage-compatible object and is useful for tests.
 

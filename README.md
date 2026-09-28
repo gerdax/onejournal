@@ -1,53 +1,37 @@
-# Bestiariusz Śródziemia
+# onejournal
 
-Lokalne narzędzie Mistrzyni Wiedzy do prowadzenia walk w Jedynym Pierścieniu: generator i biblioteka przeciwników, arkusze bojowe bohaterów oraz losowana mapa z żetonami.
-
-## Uruchomienie
-
-W katalogu projektu uruchom `python3 -m http.server 8765`, następnie otwórz http://localhost:8765. Aplikacja nie wymaga budowania ani backendu. Po pierwszym pełnym wczytaniu zasoby aplikacji są dostępne offline. Fonty internetowe mają lokalne odpowiedniki zastępcze.
+Polska aplikacja do wspólnej gry w Jedyny Pierścień: mistrz gry, prywatne arkusze bohaterów, wspólna mapa i dziennik rzutów. Niezależna wersja projektu [bestiary](https://github.com/gerdax/bestiary), z zachowaną historią. Tag `bestiary-baseline-2026-09-28` wskazuje wersję źródłową.
 
 ## Korzystanie
 
-- W zakładce **Bohaterowie** utwórz i edytuj arkusze; dodawaj bohaterów do potyczki na mapie.
-- Przeciwników dodawaj z generatora lub biblioteki. Każdy uczestnik otrzymuje żeton po wygenerowaniu mapy.
-- Na ekranie dotykowym przesuwaj mapę dwoma palcami, a gestem szczypania zmieniaj powiększenie. Jeden palec służy do wybierania i przeciągania żetonów.
-- W zakładce **Potyczka** wybierz scenerię i rozmiar, a następnie wygeneruj teren. Przeciągaj żetony oraz tło planszy; używaj przybliżania i dopasowania widoku.
-- Zmiany zasobów bohaterów pozostają na arkuszach po zakończeniu starcia. Teren nie wpływa automatycznie na zasady gry.
-- „Wyczyść potyczkę” w zakładce **Potyczka** usuwa mapę i uczestników, zachowując arkusze bohaterów oraz bibliotekę. Widok **Aktywna walka** jest tymczasowo wyłączony.
-- Przyciski pod zakładkami eksportują i przywracają pełną kopię danych. Import w bibliotece służy wyłącznie dodawaniu przeciwników.
+MG i gracze otwierają indywidualne linki `#access=…`. Link jest kluczem dostępu — przekazuj go tylko właściwej osobie. Po otwarciu znika z adresu; sesja utrzymuje się w tej karcie przeglądarki. Każde nowe urządzenie może wejść przez ten sam link.
 
-Dane są zapisane w tej przeglądarce, dla adresu aplikacji. Pełna kopia JSON pozwala przenieść je na inne urządzenie. Przywrócenie kopii zastępuje wszystkie bieżące dane. Dotychczasowe klucze lokalnego zapisu pozostają zachowane podczas migracji.
+- **MG:** Drużyna, Przeciwnicy, Mapa, Ustawienia. Tworzenie, kopiowanie i unieważnianie linków w Ustawieniach. Nowy link odwołuje stare sesje.
+- **Gracz:** własny arkusz i mapa. Edytuje swój arkusz, widzi żetony i wspólne zaznaczenie MG. Nie przesuwa żetonów ani nie widzi cudzych arkuszy i statystyk przeciwników.
+- **Rzuty:** animacja 3D u rzucającego, powiadomienie i historia u pozostałych. Rzuty bohaterów są wspólne, rzuty wrogów prywatne dla MG. Nie odejmują zasobów automatycznie. Wynik oczekujący na publikację można ponowić w Dzienniku bez nowego losowania.
+- **Brak internetu:** ostatni widok zostaje; zapisy i nowe rzuty są zablokowane. Szkic wpisany w arkuszu pozostaje w otwartej karcie i można go ponowić po odzyskaniu połączenia. Zamknięcie karty może utracić niezapisany szkic.
 
-## Sprawdzenie
+Dane wspólnej gry przechowuje Supabase. Kod frontendowy publikuje GitHub Pages. Komputer MG nie musi być włączony. Baza nie jest częścią publicznego repozytorium.
 
-Testy bez dodatkowych zależności: `node --test tests/*.test.js`.
+## Uruchomienie i wdrożenie
 
-Test przeglądarkowy: `node tests/browser-smoke.cjs` przy uruchomionym serwerze. Wymaga dostępnego pakietu `playwright` (lokalnie albo przez `NODE_PATH`) i Chrome. Opcjonalne zmienne: `BASE_URL`, `CHROME_PATH`, `SCREENSHOT_DIR`. Test używa oddzielnych kontekstów przeglądarki i nie zmienia danych użytkownika.
+Zobacz [DEPLOYMENT.md](DEPLOYMENT.md). `config.js` zawiera wyłącznie publiczny adres projektu i publishable key. Klucze administracyjne, sekret szyfrujący i linki graczy nie mogą trafiać do tego pliku ani do repozytorium.
 
-Test pełnego arkusza i układu responsywnego: `node tests/hero-sheet.cjs` (te same wymagania Playwright/Chrome; osobny kontekst i dane testowe).
+Frontend lokalny: `python3 -m http.server 8877`, adres `http://localhost:8877/`. Origin musi być dopuszczony w konfiguracji funkcji. Produkcyjny katalog publicznych plików przygotowuje `node scripts/build-site.mjs`; aplikacja nie wymaga bundlera ani pakietów npm do działania. Workflow Pages publikuje tylko `dist/`.
 
-Test panelu bohatera na mapie: `node tests/map-hero-panel.cjs` (Playwright/Chrome; izolowane dane). Sprawdza współdzielone zasoby i stany oraz nawigację po bohaterach według postawy i po przeciwnikach alfabetycznie.
+## Testy
 
-Interfejs wspólnego stanu opisuje [STATE_API.md](STATE_API.md).
+- `node --test tests/*.test.js` — reguły, stan, uprawnienia, kopie i adapter chmurowy.
+- `node --check <zmieniony-plik.js>` — składnia.
+- `NODE_PATH=<katalog-node_modules> node tests/online.cjs` — izolowany serwer w pamięci i osobne przeglądarki MG/dwóch graczy.
+- `NODE_PATH=<katalog-node_modules> node tests/dice-online.cjs` — rzeczywisty rzut WebGL oraz ponowienie publikacji po awarii sieci.
 
-Test gestów mapy: `node tests/map-touch.cjs` (Playwright/Chrome; izolowane dane i zdarzenia dotykowe CDP).
+Testy przeglądarkowe wymagają Playwright i Chrome. `CHROME_PATH` nadpisuje domyślną ścieżkę macOS. Pozostałe odziedziczone skrypty `.cjs` opisują lokalny interfejs bestiary i nie są testami online; nie uruchamiaj ich na produkcji.
 
-Scenerie map: Las, Polana, Ruiny, Jaskinia, Las z polaną, Leśne rozstaje, Trakt, Rzeka, Rzeka z brodem, Bagna i Skalisty wąwóz. Ścieżki i woda są elementami wizualnymi; nie blokują przesuwania żetonów. Nowe układy powstają po wygenerowaniu mapy — zapisane mapy nie zmieniają się po aktualizacji.
+## Dane i migracja
 
-Test scenerii: `node tests/map-scenes.cjs` (Playwright/Chrome; izolowane dane, generowanie, przeładowanie i przywracanie kopii).
+W Ustawieniach MG można eksportować pełną grę do JSON (`format: onejournal`, wersja 1), w tym dziennik, oraz importować dotychczasowe kopie bestiary w wersji 2. Import zastępuje dane wspólnej gry; nie scala ich. Kopia onejournal odtwarza dziennik, import starej kopii bez dziennika zachowuje istniejący dziennik. Usunięcie bohatera przez przywrócenie kopii odbiera jego dostęp. Eksport nie zawiera sekretów ani sesji.
 
-Generowanie losuje również układ scenerii: las bez drogi, ze ścieżką lub traktem; polanę z 1–3 wejściami; rozstaje Y lub X; trakt i wąwóz także po przekątnej; kamieniste brzegi rzeki po jednej lub obu stronach; ruiny z nieregularną zabudową wokół traktu, placu lub długiego muru. Warianty są niezależne i mogą się powtarzać, a to samo ziarno daje identyczny układ.
+onejournal nie odczytuje `localStorage` bestiary. Import danych jest jawny i nigdy nie usuwa starego zapisu. Przy publikacji obu aplikacji pod `gerdax.github.io` mają wspólny origin: nowy service worker czyści tylko własny cache, ale stary worker bestiary może usuwać cache innych aplikacji przy swojej aktywacji. Pełną izolację daje osobny origin. Nie otwieraj starych i nowych linków w tej samej karcie bez zakończenia sesji.
 
-Ruiny mają nieregularne układy: zabudowę wzdłuż traktu, otwarty plac lub długi mur z przerwami. Budowle różnią się kształtem, rozmiarem i orientacją; przejścia pozostają wolne od gruzu.
-
-Przycisk w prawym górnym rogu mapy rozwija ją na całe okno; ponowne kliknięcie lub Escape przywraca zwykły widok. Test: `node tests/map-fullscreen.cjs` (izolowany Playwright/Chrome, komputer i telefon).
-
-## Rzuty kośćmi
-
-Przycisk „Rzuć kośćmi” otwiera nakładkę nad dowolną zakładką (jest ukryty na mapie pełnoekranowej). Wybierz Bohatera lub Wroga, pulę, stan Kości Działania i ręczne modyfikatory. PT jest opcjonalny. „Przygotuj kolejny rzut” zachowuje ustawienia do zamknięcia strony. Bohater może wydać Nadzieję za +1 kość sukcesu (Natchniony: +2); Wróg może wydać Nienawiść/Determinację za +1 kość sukcesu i nigdy nie jest Natchniony. Roller nie zmienia zasobów w arkuszu ani starciu. Strzałka przy nagłówku „Rzut” zwija ustawienia, pozostawiając pulę, podgląd i przycisk rzutu. Powrót z wyniku zachowuje stan zwinięcia, a zamknięcie i ponowne otwarcie nakładki przywraca rozwinięty widok.
-
-Moduł jest odseparowany: `dice-rules.js` zawiera czyste reguły, `dice-engine.js` adapter lokalnego Dice Box 1.1.4, a `dice-roller.js` i `dice-roller.css` nakładkę. `DiceRoller.open()` / `close()` umożliwiają otwieranie z przyszłych modułów. Wynik pochodzi z symulacji 3D, bez osobnego losowania. Symbole automatycznego sukcesu nie dodają liczby do sumy; zapewniają sukces niezależnie od sumy, także bez wpisanego PT. Oko Przygnębionego Bohatera powoduje porażkę, gdy jest wybraną Kością Działania.
-
-Biblioteka, WASM i oba motywy są lokalne i objęte pamięcią offline. Kości są wyświetlane na przezroczystej warstwie nad całym oknem, również nad panelem rzutu i wyniku; warstwa przepuszcza kliknięcia do przycisków. Rozmiar kości jest dobierany przy rzucie do stałej wielkości na ekranie (około 60 px), niezależnie od wysokości okna, panelu i gęstości Retina. Kości mają zwiększoną masę oraz tłumienie ruchu. Silnik wczytuje się przy pierwszym rzucie; wymaga WebGL. Przy błędzie wyświetla komunikat, bez zastępowania rzutu innym losowaniem. Premia/kara ma zakres −6…+6; maksymalna pula to 14 kości sukcesu i 2 kości działania.
-
-Test modułu w izolowanym Chrome: `node tests/dice-roller.cjs` (zmienne środowiska jak dla smoke testu). Test skali kości w różnych oknach i dużej puli na telefonie: `node tests/dice-size.cjs`. Test zwijania i pamięci widoku: `node tests/dice-collapse.cjs`. Test rozdzielczości renderowania (DPR 1/2/3, Retina z limitem 1,5×), zmiany rozmiaru i kolejnych rzutów: `node tests/dice-resolution.cjs`. Atlas symboli można odtworzyć przez `node scripts/dice-textures.cjs` z dostępnym Playwright; nie jest to wymagane do uruchomienia aplikacji.
+Przenośny kontrakt opisuje [STATE_API.md](STATE_API.md), a warstwę serwerową [BACKEND.md](BACKEND.md). Dane mają własne identyfikatory. Reguły i model gry nie zależą od Supabase; przy zmianie dostawcy należy odtworzyć uwierzytelnianie, transakcje i powiadomienia oraz wykonać próbny import.

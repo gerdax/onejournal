@@ -1,0 +1,4 @@
+project_id = "onejournal"
+
+[functions.onejournal]
+verify_jwt = true

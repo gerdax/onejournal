@@ -1,7 +1,7 @@
 {
-  "name": "Bestiariusz Śródziemia",
-  "short_name": "Bestiariusz",
-  "description": "Generator przeciwników i narzędzie do prowadzenia walki w The One Ring RPG.",
+  "name": "onejournal",
+  "short_name": "onejournal",
+  "description": "Wspólna gra w Jedyny Pierścień — mistrz gry i bohaterowie.",
   "lang": "pl",
   "start_url": "./",
   "scope": "./",

@@ -16,13 +16,16 @@
   skillGroups.flat().forEach(([key]) => { const name = "skill" + key; fields.push(name); numeric.add(name); booleans.add(name + "Favoured"); });
   fields.push(...booleans);
   for (let i = 0; i < 4; i++) ["Name", "Damage", "Injury", "Load", "Notes"].forEach(key => fields.push(`weapon${i}${key}`));
-  let editingId = null, draftDirty = false;
+  let editingId = null, draftDirty = false, draftVersion = null;
   const dirtyFields = new Set();
   const listCards = new Map();
   // View preferences belong to the editor, not to individual hero records.
   const sectionOpen = { character: true, attributes: true, gear: true, equipment: true };
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; };
   const heroById = id => store.getState().heroes.find(h => h.id === id);
+  const isPlayer = () => store.access?.role === "player";
+  const canSave = () => store.connection === "online" && store.canWrite;
+  const saveError = error => error?.message || "Nie udało się zapisać zmiany.";
 
   host.innerHTML = `<div class="section-heading hero-heading"><div><h2>Drużyna</h2></div><button type="button" class="text-button" data-hero-action="new">+ Nowy bohater</button></div><div class="heroes-layout"><div id="hero-list" class="hero-list" role="tablist" aria-label="Arkusze bohaterów"></div><div id="hero-empty-panel" class="hero-empty" hidden>Nie ma jeszcze bohaterów. Użyj „Nowy bohater”, aby utworzyć pierwszy arkusz.</div><form id="hero-editor" class="paper form-card hero-editor" role="tabpanel" aria-label="Arkusz bohatera" novalidate></form></div>`;
   const list = host.querySelector("#hero-list"), form = host.querySelector("#hero-editor");
@@ -56,7 +59,7 @@
       <section class="sheet-gear"><h3>Rynsztunek</h3><div class="sheet-gear-grid"><div class="sheet-weapons">${Array.from({length: 4}, (_, i) => `<div class="sheet-weapon-row">${[["Broń", "Name"], ["Obrażenia", "Damage"], ["Przebicie", "Injury"], ["Obciążenie", "Load"], ["Uwagi", "Notes"]].map(([label, key]) => textField(label, `weapon${i}${key}`)).join("")}</div>`).join("")}</div><div class="sheet-armour">${[["Zbroja", "armourName", "Pancerz (k)", "armour", "armourLoad"], ["Hełm", "helmName", "Pancerz (k)", "helmProtection", "helmLoad"], ["Tarcza", "shieldName", "Obrona", "shieldParry", "shieldLoad"]].map(([label, name, protection, key, load]) => `<div>${textField(label, name)}${numberField(protection, key)}${numberField("Obciążenie", load)}</div>`).join("")}</div></div></section>
       <div class="sheet-bottom"><section><h3>Ekwipunek</h3>${area("Przedmioty i wyposażenie", "equipment", 5)}</section><section class="sheet-progress">${textField("Poziom życia", "standardOfLiving")}<div class="sheet-points">${numberField("Punkty przygody", "adventurePoints")}${numberField("Punkty umiejętności", "skillPoints")}${numberField("Poziom zażyłości", "fellowship")}</div></section></div>
       <details class="sheet-extra sheet-disclosure"><summary>Notatki</summary><div>${area("Notatki bohatera", "notes")}</div></details>
-      <div class="form-actions hero-editor-footer"><div class="hero-editor-footer-actions"></div><span class="hero-save-status" role="status" aria-live="polite">Zapisano automatycznie</span></div>`;
+      <div class="form-actions hero-editor-footer"><div class="hero-editor-footer-actions"></div><button type="button" class="text-button hero-retry" hidden>Ponów zapis</button><span class="hero-save-status" role="status" aria-live="polite">Zapisano</span></div>`;
     [
       ["character", ".sheet-top", "Postać"],
       ["attributes", ".sheet-columns", "Cechy i umiejętności"],
@@ -85,8 +88,8 @@
     syncInjury(form, hero);
     form.elements.name.required = true;
     form.elements.name.maxLength = 80;
-    if (hero && !embedded) { const actions = form.querySelector(".hero-editor-actions"), footer = form.querySelector(".hero-editor-footer-actions"), inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); const battle = el("button", "text-button", inBattle ? "Usuń z potyczki" : "Dodaj do potyczki"); battle.type = "button"; battle.dataset.heroAction = "battle"; battle.dataset.id = hero.id;  actions.append(battle); const remove = el("button", "text-button danger", "Usuń bohatera"); remove.type = "button"; remove.dataset.heroAction = "delete"; remove.dataset.id = hero.id; footer.append(remove); }
-    if (!embedded) { draftDirty = false; dirtyFields.clear(); }
+    if (hero && !embedded && !isPlayer()) { const actions = form.querySelector(".hero-editor-actions"), footer = form.querySelector(".hero-editor-footer-actions"), inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); const battle = el("button", "text-button", inBattle ? "Usuń z potyczki" : "Dodaj do potyczki"); battle.type = "button"; battle.dataset.heroAction = "battle"; battle.dataset.id = hero.id;  actions.append(battle); const remove = el("button", "text-button danger", "Usuń bohatera"); remove.type = "button"; remove.dataset.heroAction = "delete"; remove.dataset.id = hero.id; footer.append(remove); }
+    if (!embedded) { draftDirty = false; draftVersion = null; dirtyFields.clear(); }
   }
   function syncInjury(editor, hero, dirty) {
     const injury = editor.elements.injury;
@@ -112,7 +115,25 @@
             editor.noValidate = true;
             editor.setAttribute("aria-label", "Arkusz wybranego bohatera");
             const dirty = new Set();
+            let baseVersion = null, saving = false;
             const status = text => { editor.querySelector(".hero-save-status").textContent = text; };
+            const save = async name => {
+              if (saving || !dirty.has(name)) return;
+              if (!canSave()) { status("Brak połączenia. Zmiany czekają na zapis."); editor.querySelector(".hero-retry").hidden = false; return; }
+              if (!validForm([name], editor)) { status("Popraw zaznaczone pole."); return; }
+              const control = editor.elements[name];
+              const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim();
+              const sent = booleans.has(name) ? control.checked : control.value;
+              saving = true; status("Zapisywanie…");
+              try {
+                await store.saveHero({id, [name]:value}, baseVersion);
+                if ((booleans.has(name) ? control.checked : control.value) === sent) dirty.delete(name);
+                baseVersion = dirty.size ? store.heroVersions?.[id] ?? null : null;
+                sync(); status(dirty.size ? "Niezapisane zmiany" : "Zapisano");
+                editor.querySelector(".hero-retry").hidden = !dirty.size;
+              } catch (error) { status(saveError(error) + " Ponów zapis po sprawdzeniu zmian."); editor.querySelector(".hero-retry").hidden = false; }
+              finally { saving = false; }
+            };
             const sync = () => {
               const current = heroById(id);
               if (!current) return;
@@ -130,21 +151,15 @@
             };
             drawEditor(hero, editor, {character:false, attributes:false, gear:false, equipment:false}, true);
             editor.addEventListener("input", event => {
-              if (fields.includes(event.target.name)) { dirty.add(event.target.name); status("Niezapisane zmiany"); }
+              if (fields.includes(event.target.name)) { if (!dirty.size) baseVersion = store.heroVersions?.[id] ?? null; dirty.add(event.target.name); status("Niezapisane zmiany"); }
             });
             editor.addEventListener("change", event => {
               const name = event.target.name;
               if (!fields.includes(name)) return;
-              dirty.add(name);
-              if (!validForm([name], editor)) { status("Popraw zaznaczone pole."); return; }
-              const value = booleans.has(name) ? event.target.checked : numeric.has(name) ? Number(event.target.value) : event.target.value.trim();
-              try {
-                store.saveHero({id, [name]:value});
-                dirty.delete(name);
-                sync();
-                status(dirty.size ? "Niezapisane zmiany" : "Zapisano automatycznie");
-              } catch (_) { status("Nie udało się zapisać pola."); }
+              if (!dirty.size) baseVersion = store.heroVersions?.[id] ?? null;
+              dirty.add(name); save(name);
             });
+            editor.querySelector(".hero-retry").addEventListener("click", async () => { baseVersion = store.heroVersions?.[id] ?? null; for (const name of [...dirty]) await save(name); });
             editor.addEventListener("submit", event => { event.preventDefault(); if (editor.contains(document.activeElement)) document.activeElement.blur(); });
             sheet = {editor, sync};
             sheets.set(id, sheet);
@@ -161,7 +176,7 @@
   function status(text) { const target = form.querySelector(".hero-save-status"); if (target) target.textContent = text; }
   function edit(id) { const hero = heroById(id); if (!hero) return; editingId = id; drawEditor(hero); renderList(); }
   function restoreEditor() { const hero = heroById(editingId); if (hero) drawEditor(hero); }
-  function createHero() { if (!mayDiscard()) return; try { const saved = store.saveHero({ name: "Bohater" }); editingId = saved.id; drawEditor(saved); renderList(); } catch (_) { const prior = host.querySelector(".hero-create-status"); if (prior) prior.remove(); host.querySelector(".hero-heading").append(el("span", "hero-create-status", "Nie udało się utworzyć bohatera.")); } }
+  async function createHero() { if (isPlayer() || !mayDiscard()) return; try { if (!canSave()) throw new Error("Brak połączenia."); const saved = await store.saveHero({ name: "Bohater" }); editingId = saved.id; drawEditor(saved); renderList(); } catch (error) { const prior = host.querySelector(".hero-create-status"); if (prior) prior.remove(); host.querySelector(".hero-heading").append(el("span", "hero-create-status", saveError(error))); } }
   function mayDiscard() { return !draftDirty || confirm("Niezapisany szkic zostanie porzucony."); }
   function discardDraft() { restoreEditor(); }
   function validForm(names, target = form) {
@@ -186,7 +201,8 @@
     const state = store.getState(), ids = new Set(state.heroes.map(hero => hero.id));
     listCards.forEach((card, id) => { if (!ids.has(id)) { card.remove(); listCards.delete(id); } });
     const emptyPanel = host.querySelector("#hero-empty-panel");
-    if (!state.heroes.length) { form.hidden = true; emptyPanel.hidden = false; return; }
+    host.querySelector('[data-hero-action="new"]').hidden = isPlayer();
+    if (!state.heroes.length) { form.hidden = true; emptyPanel.hidden = false; emptyPanel.textContent = isPlayer() ? "Nie przypisano arkusza bohatera." : "Nie ma jeszcze bohaterów. Użyj „Nowy bohater”, aby utworzyć pierwszy arkusz."; return; }
     form.hidden = false; emptyPanel.hidden = true;
     if (!editingId) { editingId = state.heroes[0].id; drawEditor(state.heroes[0]); }
     state.heroes.forEach(hero => {
@@ -197,10 +213,10 @@
   }
   function renderBattle() {
     const participants = store.getParticipants().filter(p => p.type === "hero"); battleList.replaceChildren();
-    participants.forEach(hero => {
+    participants.filter(hero => !isPlayer() || hero.heroId === store.access?.heroId).forEach(hero => {
       const card = el("article", "battle-card hero-battle-card" + (hero.defeated ? " defeated-card" : "")); card.dataset.id = hero.id;
       const top = el("div", "card-top"), title = el("div"); title.append(el("p", "enemy-tier", hero.culture || "BOHATER"), el("h3", "enemy-name", hero.name || "Bez imienia"), el("p", "enemy-kind", `${hero.stance === "Ostrożna" ? "Defensywna" : hero.stance || "Wyważona"}${hero.conditions ? " · " + hero.conditions : ""}`));
-      const actions = el("div", "card-actions"); [ ["Edytuj arkusz", "edit"], ["×", "remove"] ].forEach(([label, action]) => { const b = el("button", action === "remove" ? "icon-button" : "text-button", label); b.type = "button"; b.dataset.heroAction = action; b.dataset.id = hero.id; b.title = action === "remove" ? "Usuń ze starcia" : "Edytuj arkusz"; actions.append(b); }); top.append(title, actions); card.append(top);
+      const actions = el("div", "card-actions"); (isPlayer() ? [["Edytuj arkusz", "edit"]] : [["Edytuj arkusz", "edit"], ["×", "remove"]]).forEach(([label, action]) => { const b = el("button", action === "remove" ? "icon-button" : "text-button", label); b.type = "button"; b.dataset.heroAction = action; b.dataset.id = hero.id; b.title = action === "remove" ? "Usuń ze starcia" : "Edytuj arkusz"; actions.append(b); }); top.append(title, actions); card.append(top);
       const meters = el("div", "combat-stats"); [["WYTRZYMAŁOŚĆ", "endurance", hero.maxEndurance], ["NADZIEJA", "hope", hero.maxHope]].forEach(([label, field, max]) => { const meter = el("div", "meter"), controls = el("div", "adjusters"); meter.append(el("p", "", label), el("strong", "", `${hero[field]}/${max}`)); [-5, -1, 1, 5].forEach(delta => { const b = el("button", "", (delta > 0 ? "+" : "") + delta); b.type = "button"; b.dataset.heroResource = field; b.dataset.change = delta; b.dataset.id = hero.id; controls.append(b); }); meter.append(controls); meters.append(meter); }); card.append(meters);
       card.append(el("p", "detail", `Cień ${hero.shadow} · Obciążenie ${hero.load} · Znużenie ${hero.fatigue} · Obrona ${hero.parry} · Pancerz ${hero.armour}`));
       const weapons = Array.from({ length: 4 }, (_, i) => { const name = hero[`weapon${i}Name`]; if (!name) return ""; return name + [ ["obrażenia", "Damage"], ["przebicie", "Injury"] ].map(([label, key]) => hero[`weapon${i}${key}`] ? ` · ${label} ${hero[`weapon${i}${key}`]}` : "").join(""); }).filter(Boolean);
@@ -211,15 +227,18 @@
       if (conditions.length) card.append(el("p", "detail", conditions.join(" · ")));
       if (hero.weapons) card.append(el("p", "detail", `Bronie: ${hero.weapons}`));
       if (hero.proficiencies) card.append(el("p", "detail", `Biegłości bojowe: ${hero.proficiencies}`));
-      const defeated = el("button", "defeated", hero.defeated ? "Przywróć do walki" : "Oznacz jako pokonanego"); defeated.type = "button"; defeated.dataset.heroAction = "defeated"; defeated.dataset.id = hero.id; card.append(defeated); battleList.append(card);
+      if (!isPlayer()) { const defeated = el("button", "defeated", hero.defeated ? "Przywróć do walki" : "Oznacz jako pokonanego"); defeated.type = "button"; defeated.dataset.heroAction = "defeated"; defeated.dataset.id = hero.id; card.append(defeated); } battleList.append(card);
     });
   }
   function render() { const layout = host.querySelector(".heroes-layout"), priorError = host.querySelector(".hero-error"); if (store.loadError) { layout.hidden = true; if (!priorError) host.querySelector(".hero-heading").append(el("p", "hero-error", "Nie można odczytać zapisanych danych bohaterów. Przywróć poprawną pełną kopię.")); return; } layout.hidden = false; if (priorError) priorError.remove(); syncEditor(); renderList(); syncHeader(); renderBattle(); }
-  host.addEventListener("click", event => { const button = event.target.closest("[data-hero-action]"); if (!button) return; const { heroAction: action, id } = button.dataset; if (action === "new") createHero(); else if (action === "edit") { if (!mayDiscard()) return; edit(id); } else if (action === "battle") { const inBattle = store.getState().heroParticipants.some(p => p.heroId === id); if (inBattle) { if (confirm("Usunąć bohatera z potyczki? Arkusz bohatera zostanie zachowany.")) store.removeParticipant("hero:" + id); } else store.addHero(id); } else if (action === "delete" && confirm("Usunąć bohatera oraz jego udział w walce?")) { const heroes = store.getState().heroes, index = heroes.findIndex(hero => hero.id === id), next = heroes[index + 1] || heroes[index - 1]; if (editingId === id) { editingId = next ? next.id : null; draftDirty = false; dirtyFields.clear(); } store.deleteHero(id); if (editingId) edit(editingId); } });
+  host.addEventListener("click", async event => { const button = event.target.closest("[data-hero-action]"); if (!button) return; const { heroAction: action, id } = button.dataset; if (action === "new") return createHero(); if (action === "edit") { if (isPlayer() && id !== store.access?.heroId) return; if (!mayDiscard()) return; edit(id); return; } if (isPlayer() || !canSave()) { status("Brak uprawnień lub połączenia."); return; } try { if (action === "battle") { const inBattle = store.getState().heroParticipants.some(p => p.heroId === id); if (inBattle) { if (confirm("Usunąć bohatera z potyczki? Arkusz bohatera zostanie zachowany.")) await store.removeParticipant("hero:" + id); } else await store.addHero(id); } else if (action === "delete" && confirm("Usunąć bohatera oraz jego udział w walce?")) { const heroes = store.getState().heroes, index = heroes.findIndex(hero => hero.id === id), next = heroes[index + 1] || heroes[index - 1]; await store.deleteHero(id); if (editingId === id) { editingId = next ? next.id : null; draftDirty = false; dirtyFields.clear(); if (editingId) edit(editingId); } } } catch (error) { status(saveError(error)); } });
   list.addEventListener("keydown", event => { const tabs = [...listCards.values()]; if (!tabs.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const current = tabs.indexOf(event.target.closest('[role="tab"]')); let index = current; if (event.key === "Home") index = 0; else if (event.key === "End") index = tabs.length - 1; else index = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; const target = tabs[index]; if (target && mayDiscard()) { edit(target.dataset.id); target.focus(); } });
-  battleList.addEventListener("click", event => { const button = event.target.closest("button"); if (!button) return; const id = button.dataset.id; if (button.dataset.heroResource) store.adjustResource(id, button.dataset.heroResource, Number(button.dataset.change)); else if (button.dataset.heroAction === "remove") store.removeParticipant(id); else if (button.dataset.heroAction === "defeated") store.toggleDefeated(id); else if (button.dataset.heroAction === "edit") { if (!mayDiscard()) return; if (draftDirty) discardDraft(); document.querySelector('[data-tab="heroes"]').click(); edit(id.replace(/^hero:/, "")); } });
-  form.addEventListener("input", event => { if (fields.includes(event.target.name)) { draftDirty = true; dirtyFields.add(event.target.name); status("Niezapisane zmiany"); } });
-  form.addEventListener("change", event => { if (!editingId) return; const name = event.target.name; if (!fields.includes(name) || !validForm([name])) { if (fields.includes(name)) status("Popraw zaznaczone pole."); return; } const value = booleans.has(name) ? event.target.checked : numeric.has(name) ? Number(event.target.value) : event.target.value.trim(), current = heroById(editingId); if (current && current[name] === value) { dirtyFields.delete(name); draftDirty = dirtyFields.size > 0; status("Zapisano automatycznie"); return; } try { store.saveHero({ id: editingId, [name]: value }); dirtyFields.delete(name); draftDirty = dirtyFields.size > 0; syncEditor(); status("Zapisano automatycznie"); } catch (_) { status("Nie udało się zapisać pola."); } });
+  battleList.addEventListener("click", async event => { const button = event.target.closest("button"); if (!button) return; const id = button.dataset.id; if (button.dataset.heroAction === "edit") { if (!mayDiscard()) return; document.querySelector('[data-tab="heroes"]').click(); edit(id.replace(/^hero:/, "")); return; } if (isPlayer() || !canSave()) return; try { if (button.dataset.heroResource) await store.adjustResource(id, button.dataset.heroResource, Number(button.dataset.change)); else if (button.dataset.heroAction === "remove") await store.removeParticipant(id); else if (button.dataset.heroAction === "defeated") await store.toggleDefeated(id); } catch (error) { status(saveError(error)); } });
+  form.addEventListener("input", event => { if (fields.includes(event.target.name)) { if (!draftDirty) draftVersion = store.heroVersions?.[editingId] ?? null; draftDirty = true; dirtyFields.add(event.target.name); status("Niezapisane zmiany"); } });
+  let savingField = false;
+  async function saveField(name) { if (!editingId || savingField || !dirtyFields.has(name)) return; if (!validForm([name])) { status("Popraw zaznaczone pole."); return; } if (!canSave()) { status("Brak połączenia. Zmiany czekają na zapis."); form.querySelector(".hero-retry").hidden = false; return; } const control = form.elements[name], value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim(), sent = booleans.has(name) ? control.checked : control.value; savingField = true; status("Zapisywanie…"); try { await store.saveHero({ id: editingId, [name]: value }, draftVersion); if ((booleans.has(name) ? control.checked : control.value) === sent) dirtyFields.delete(name); draftDirty = dirtyFields.size > 0; draftVersion = draftDirty ? store.heroVersions?.[editingId] ?? null : null; syncEditor(); status(draftDirty ? "Niezapisane zmiany" : "Zapisano"); form.querySelector(".hero-retry").hidden = !draftDirty; } catch (error) { status(saveError(error) + " Ponów zapis po sprawdzeniu zmian."); form.querySelector(".hero-retry").hidden = false; } finally { savingField = false; } }
+  form.addEventListener("change", event => { const name = event.target.name; if (!fields.includes(name)) return; if (!draftDirty) draftVersion = store.heroVersions?.[editingId] ?? null; dirtyFields.add(name); draftDirty = true; saveField(name); });
+  form.addEventListener("click", async event => { if (!event.target.closest(".hero-retry")) return; draftVersion = store.heroVersions?.[editingId] ?? null; for (const name of [...dirtyFields]) await saveField(name); });
   form.addEventListener("submit", event => { event.preventDefault(); const active = document.activeElement; if (active && form.contains(active) && typeof active.blur === "function") active.blur(); });
   function syncHeader() { const hero = heroById(editingId), button = form.querySelector('[data-hero-action="battle"]'); if (!hero || !button) return; const inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); button.textContent = inBattle ? "Usuń z potyczki" : "Dodaj do potyczki";  }
   document.querySelector(".tabs").addEventListener("click", event => {

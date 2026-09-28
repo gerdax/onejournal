@@ -264,7 +264,9 @@
   if (!root || !root.document) return;
   const doc = root.document, store = root.OneRingStore, section = doc.getElementById('map');
   if (!section || !store) return;
-  let currentMap = null, selected = null, zoom = 1, offsetX = 0, offsetY = 0, fittedKey = '', gesture = null;
+  const isPlayer = () => store.access?.role === 'player';
+  const canSave = () => store.connection === 'online' && store.canWrite;
+  let currentMap = null, selected = null, pendingSelection = null, zoom = 1, offsetX = 0, offsetY = 0, fittedKey = '', gesture = null;
   const touchPoints = new Map();
   let touchLocked = false, touchGesture = null, suppressTouchClick = false;
   const el = (tag, className, textValue) => { const node = doc.createElement(tag); if (className) node.className = className; if (textValue != null) node.textContent = textValue; return node; };
@@ -275,7 +277,7 @@
   sceneInput.value = 'clearing';
   const generateButton = doc.getElementById('map-generate'), viewport = doc.getElementById('map-viewport'), stage = doc.getElementById('map-stage');
   const terrainSvg = doc.getElementById('map-terrain'), tokens = doc.getElementById('map-tokens'), panel = doc.getElementById('map-panel'), blank = doc.getElementById('map-blank'), errorBox = doc.getElementById('map-error');
-  function run(action) { try { action(); errorBox.hidden = true; } catch (error) { errorBox.textContent = error && error.message ? error.message : 'Nie udało się zapisać zmiany mapy.'; errorBox.hidden = false; } }
+  async function run(action) { if (!canSave()) { errorBox.textContent = 'Brak połączenia lub uprawnień do zapisu.'; errorBox.hidden = false; return false; } try { await action(); errorBox.hidden = true; return true; } catch (error) { errorBox.textContent = error && error.message ? error.message : 'Nie udało się zapisać zmiany mapy.'; errorBox.hidden = false; return false; } }
   function shape(record, parent) {
     if (!record || !Number.isFinite(record.x) || !Number.isFinite(record.y) || !Number.isFinite(record.r)) return;
     const { kind, x, y } = record, r = clamp(record.r, 3, 100), angle = record.rotation || 0, v = record.variant || 0;
@@ -352,9 +354,9 @@
     const index = peers.findIndex(item => item.participant.id === person.id);
     return peers[(index + direction + peers.length) % peers.length].participant.id;
   }
-  function saveHeroField(person, control, field, value) {
+  async function saveHeroField(person, control, field, value) {
     const start = control.selectionStart, end = control.selectionEnd;
-    run(() => store.saveHero({ id: person.heroId, [field]: value }));
+    if (!await run(() => store.saveHero({ id: person.heroId, [field]: value }))) return;
     const replacement = Array.from(panel.querySelectorAll('[name]')).find(node => node.name === field);
     if (replacement) {
       replacement.focus();
@@ -368,7 +370,8 @@
       const pos = map.positions[person.id]; if (!pos) return;
       const marker = el('button', 'map-token ' + (person.type === 'hero' ? 'hero-token' : 'enemy-token') + (person.defeated ? ' is-defeated' : '') + (selected === person.id ? ' is-selected' : ''));
       marker.type = 'button'; marker.dataset.id = person.id; marker.style.left = clamp(pos.x, 30, map.width - 30) + 'px'; marker.style.top = clamp(pos.y, 30, map.height - 30) + 'px';
-      marker.setAttribute('aria-label', `${names[index]}, ${person.type === 'hero' ? 'bohater' : 'przeciwnik'}${person.defeated ? ', pokonany' : ''}. Strzałki przesuwają znacznik.`);
+      marker.setAttribute('aria-label', `${names[index]}, ${person.type === 'hero' ? 'bohater' : 'przeciwnik'}${person.defeated ? ', pokonany' : ''}.${isPlayer() ? '' : ' Strzałki przesuwają znacznik.'}`);
+      if (isPlayer()) marker.tabIndex = -1;
       const symbol = el('span', 'map-token-symbol', person.type === 'hero' ? '✦' : '◆'); const label = el('span', 'map-token-label', names[index]); marker.append(symbol, label); tokens.appendChild(marker);
     });
   }
@@ -406,10 +409,11 @@
   function renderPanel(participants) {
     doc.getElementById('map-center').disabled = !currentMap || !participants.some(person => person.id === selected);
     const selectedHero = participants.find(p => p.id === selected && p.type === "hero");
-    heroSheet.show(!store.loadError && currentMap && selectedHero ? selectedHero.heroId : null);
+    heroSheet.show(isPlayer() ? store.access?.heroId : !store.loadError && currentMap && selectedHero ? selectedHero.heroId : null);
     enemySheet.hidden = true; enemyDetails.hidden = true; enemyNotes.hidden = true;
     panel.replaceChildren();
     panel.classList.remove('is-defeated');
+    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; panel.append(el('p', 'eyebrow', 'ZAZNACZENIE MISTRZA GRY'), el('h3', '', selected ? participants.find(p => p.id === selected)?.name || 'Brak' : 'Brak')); return; }
     if (store.loadError) { panel.append(el('p', 'eyebrow', 'BŁĄD ZAPISU'), el('h3', '', 'Nie można wczytać danych'), el('p', 'map-panel-help', 'Przywróć poprawną kopię zapasową, aby ponownie korzystać z mapy.')); return; }
     if (!currentMap) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Stwórz mapę, by zobaczyć dodanych uczestników')); return; }
     if (!participants.length) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dodaj bohatera lub przeciwnika do aktywnej walki.')); return; }
@@ -425,9 +429,7 @@
     const peerCount = participants.filter(p => p.type === person.type).length;
     previous.disabled = next.disabled = peerCount < 2;
     for (const [button, direction] of [[previous, -1], [next, 1]]) button.addEventListener('click', () => {
-      selected = cycleParticipants(participants, names, person, direction);
-      renderTokens(currentMap, participants);
-      renderPanel(participants);
+      selectParticipant(cycleParticipants(participants, names, person, direction));
       const replacement = panel.querySelector(direction < 0 ? '.map-cycle-prev' : '.map-cycle-next');
       if (replacement) replacement.focus();
     });
@@ -516,14 +518,17 @@
   function zoomAt(factor, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) { if (!currentMap) return; const next = clamp(zoom * factor, .1, 3); offsetX = x - (x - offsetX) * next / zoom; offsetY = y - (y - offsetY) * next / zoom; zoom = next; transform(); }
   function refresh(snapshot) {
     const map = snapshot.map, participants = store.getParticipants();
-    if (selected && !participants.some(p => p.id === selected)) selected = null;
+    selected = store.selection || null;
     const key = map ? JSON.stringify([map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
     const terrainChanged = key !== fittedKey;
     if (terrainChanged) { gesture = null; touchPoints.clear(); touchGesture = null; touchLocked = false; }
     currentMap = map;
     blank.hidden = !!map; stage.hidden = !map;
-    generateButton.textContent = 'Wygeneruj mapę'; generateButton.disabled = !!store.loadError;
-    if (store.loadError) { errorBox.textContent = 'Nie można zapisać mapy: zapisane dane są uszkodzone. Przywróć poprawną kopię zapasową.'; errorBox.hidden = false; } else { errorBox.hidden = true; }
+    if (isPlayer()) blank.querySelector('p').textContent = 'Mistrz gry nie przygotował jeszcze mapy.';
+    generateButton.textContent = 'Wygeneruj mapę'; generateButton.disabled = !!store.loadError || isPlayer() || !canSave();
+    section.querySelector('.map-heading-actions').hidden = isPlayer();
+    section.querySelector('.map-toolbar').hidden = isPlayer();
+    if (store.loadError) { errorBox.textContent = 'Nie można zapisać mapy: zapisane dane są uszkodzone. Przywróć poprawną kopię zapasową.'; errorBox.hidden = false; }
     if (map) {
       if (terrainChanged) { sceneInput.value = SCENES[map.scene] ? map.scene : 'clearing'; sizeInput.value = SIZES[map.size] ? map.size : 'medium'; }
       stage.style.width = map.width + 'px'; stage.style.height = map.height + 'px';
@@ -532,10 +537,10 @@
     } else { fittedKey = ''; tokens.replaceChildren(); }
     renderPanel(participants);
   }
-  doc.getElementById('map-add-heroes').addEventListener('click', () => run(() => {
+  doc.getElementById('map-add-heroes').addEventListener('click', () => run(async () => {
     const snapshot = store.getState();
     const participating = new Set(snapshot.heroParticipants.map(p => p.heroId));
-    snapshot.heroes.filter(hero => !participating.has(hero.id)).forEach(hero => store.addHero(hero.id));
+    for (const hero of snapshot.heroes.filter(hero => !participating.has(hero.id))) await store.addHero(hero.id);
     const firstHero = store.getParticipants().filter(person => person.type === 'hero').sort((a, b) => polish.compare(a.name, b.name))[0];
     if (firstHero) selectParticipant(firstHero.id);
   }));
@@ -608,7 +613,7 @@
     if (gesture && gesture.type === 'token') {
       gesture.node.style.left = gesture.x + 'px';
       gesture.node.style.top = gesture.y + 'px';
-      selected = gesture.previousSelection;
+      selected = store.selection || null;
       renderPanel(store.getParticipants());
       tokens.querySelectorAll('.map-token').forEach(node => node.classList.toggle('is-selected', node.dataset.id === selected));
     }
@@ -642,10 +647,10 @@
     }
     if (gesture || touchLocked) return;
     const marker = event.target.closest('.map-token');
-    if (marker) {
+    if (marker && !isPlayer() && canSave()) {
       marker.focus();
       const previousSelection = selected;
-      selected = marker.dataset.id; renderPanel(store.getParticipants()); tokens.querySelectorAll('.map-token').forEach(n => n.classList.toggle('is-selected', n.dataset.id === selected));
+      selectParticipant(marker.dataset.id);
       const pos = currentMap.positions[selected]; gesture = { type: 'token', id: selected, node: marker, previousSelection, startX: event.clientX, startY: event.clientY, x: pos.x, y: pos.y };
     } else if (event.pointerType !== 'touch') gesture = { type: 'pan', startX: event.clientX, startY: event.clientY, x: offsetX, y: offsetY };
     if (!gesture) return;
@@ -684,22 +689,26 @@
     if (!gesture || event.pointerId !== gesture.pointerId) return;
     const done = gesture; gesture = null;
     if (event.type !== 'pointerup') { if (done.type === 'token') restoreTokenNode(done); return; }
-    if (done.type === 'token' && Number.isFinite(done.nextX)) run(() => store.moveToken(done.id, done.nextX, done.nextY));
+    if (done.type === 'token' && Number.isFinite(done.nextX)) run(() => store.moveToken(done.id, done.nextX, done.nextY)).then(ok => { if (!ok && done.node.isConnected) restoreTokenNode(done); });
   }
   function restoreTokenNode(done) { done.node.style.left = done.x + 'px'; done.node.style.top = done.y + 'px'; }
   viewport.addEventListener('pointerup', finishGesture); viewport.addEventListener('pointercancel', finishGesture); viewport.addEventListener('lostpointercapture', finishGesture);
   viewport.addEventListener('click', event => { if (suppressTouchClick && event.pointerType === 'touch') { event.preventDefault(); event.stopPropagation(); } }, true);
-  tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker) return; selected = marker.dataset.id; renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
-  tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selected = marker.dataset.id; renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selected = marker.dataset.id; const pos = currentMap.positions[selected], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(selected, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
+  tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker || isPlayer()) return; selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
+  tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(marker.dataset.id); const pos = currentMap.positions[selected], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(selected, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
   if (root.ResizeObserver) new root.ResizeObserver(() => { if (currentMap && section.classList.contains('active') && viewport.clientWidth && viewport.clientHeight && !gesture && !touchPoints.size) fit(); }).observe(viewport);
   doc.addEventListener('one-ring:tab', event => { if (event.detail === 'map' || event.detail && event.detail.tab === 'map') root.requestAnimationFrame(() => { if (currentMap && viewport.clientWidth) fit(); }); });
   store.subscribe(refresh); refresh(store.getState());
   function selectParticipant(id) {
+    if (isPlayer() || !canSave()) return;
     const participants = store.getParticipants();
     if (!participants.some(person => person.id === id)) return;
+    if (id === pendingSelection || id === store.selection) return;
+    pendingSelection = id;
     selected = id;
     if (currentMap) renderTokens(currentMap, participants);
     renderPanel(participants);
+    run(() => store.selectToken(id)).then(ok => { if (pendingSelection !== id) return; pendingSelection = null; if (!ok) { selected = store.selection || null; if (currentMap) renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); } });
   }
   root.OneRingMap = { generateTerrain, fit, selectParticipant };
 })(typeof window !== 'undefined' ? window : null);

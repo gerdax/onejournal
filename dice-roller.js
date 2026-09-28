@@ -72,6 +72,21 @@
 
   function renderSetup() {
     if (!dialog) return;
+    const store = root.OneRingStore;
+    if (store.access.role === 'player') config.actor = 'hero';
+    setup.querySelector('[data-choice="actor"]').closest('fieldset').hidden = store.access.role === 'player';
+    let picker = setup.querySelector('.dice-hero-picker');
+    if (!picker) {
+      picker = element('<label class="dice-hero-picker">Bohater<select aria-label="Bohater rzucający"></select></label>');
+      setup.querySelector('#dice-settings').prepend(picker);
+    }
+    picker.hidden = config.actor !== 'hero';
+    const select = picker.querySelector('select'), prior = select.value;
+    select.replaceChildren();
+    store.getState().heroes.forEach(hero => { const option = document.createElement('option'); option.value = hero.id; option.textContent = hero.name; select.append(option); });
+    if (store.getState().heroes.some(hero => hero.id === prior)) select.value = prior;
+    if (store.access.role === 'player') select.value = store.access.heroId;
+    select.disabled = !!pending || store.access.role === 'player';
     dialog.dataset.actor = config.actor;
     setup.querySelectorAll('[data-choice]').forEach(group => {
       const field = group.dataset.choice;
@@ -105,7 +120,7 @@
       if (i >= featCount + pool) die.style.visibility = 'hidden';
       preview.append(die);
     }
-    setup.querySelector('.dice-roll').disabled = !!pending;
+    setup.querySelector('.dice-roll').disabled = !!pending || !store.canWrite || (config.actor === 'hero' && !select.value);
     renderCollapse();
   }
 
@@ -243,6 +258,7 @@
 
   async function roll() {
     if (pending || !dialog.open) return;
+    if (!root.OneRingStore.canWrite) { showError('Brak połączenia — rzut jest zablokowany.'); return; }
     const targetInput = setup.querySelector('[data-target]');
     if (!targetInput.checkValidity()) {
       collapsed = false;
@@ -258,6 +274,9 @@
     }
     const token = ++generation;
     const snapshot = { ...config };
+    let prepared;
+    try { prepared = root.OneJournalRolls.prepare(snapshot, setup.querySelector('.dice-hero-picker select').value); }
+    catch (error) { showError(error.message); return; }
     const pool = root.DiceRules.calculatePool(snapshot);
     const button = setup.querySelector('.dice-roll');
     button.disabled = true;
@@ -270,8 +289,16 @@
       }));
       renderSetup();
       const raw = await pending;
-      if (token !== generation || !dialog.open) return;
-      showResult(root.DiceRules.interpretRoll(snapshot, raw));
+      // Always preserve a settled roll, even when the overlay was closed.
+      const rollId = root.OneJournalRolls.capture(prepared, raw);
+      let publication;
+      if (token === generation && dialog.open) {
+        showResult(root.DiceRules.interpretRoll(snapshot, raw));
+        publication = element('<p class="roll-publication" role="status">Publikowanie wyniku…</p>');
+        resultPanel.append(publication);
+      }
+      try { await root.OneJournalRolls.publish(rollId); if (publication) publication.textContent = 'Wynik zapisany w dzienniku.'; }
+      catch (_) { if (publication) publication.textContent = 'Wynik nieopublikowany. Otwórz Dziennik rzutów i ponów publikację.'; }
     } catch (error) {
       if (token === generation && dialog.open) showError(`Rzut się nie powiódł: ${error && error.message ? error.message : 'nieznany błąd. Spróbuj ponownie.'}`);
     } finally {
@@ -283,6 +310,7 @@
   }
 
   root.DiceRoller = { open, close };
+  root.OneRingStore.subscribe(() => { if (dialog && dialog.isConnected) renderSetup(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
   else mount();
 })(globalThis);
