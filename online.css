@@ -30,4 +30,4 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
   .tabs .tab { padding-inline: 8px; font-size: 15px; white-space: nowrap; }
 }
 
-#journal-open { margin-left: auto; }
+.nav-actions { display: flex; gap: inherit; margin-left: auto; flex-shrink: 0; }
