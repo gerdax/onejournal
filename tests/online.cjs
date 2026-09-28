@@ -29,8 +29,15 @@ async function main() {
   const [heroOne, heroTwo] = fixture.heroes;
   try {
     assert.equal((await state(gm.page)).heroes.length, 2);
+    assert.equal(await gm.page.locator('.hero-heading h2').textContent(), 'Drużyna');
+    assert.equal(await gm.page.locator('#hero-list [role=tab]').count(), 2);
+    assert.match(await gm.page.locator('[data-tab=map]').textContent(), /^Potyczka/);
     for (const [page, own, other] of [[one.page, heroOne, heroTwo], [two.page, heroTwo, heroOne]]) {
       const visible = await state(page);
+      assert.equal(await page.locator('.hero-heading h2').textContent(), own.name);
+      assert.equal(await page.locator('#hero-list').isVisible(), false);
+      assert.equal(await page.locator('#hero-list [role=tab]').count(), 0);
+      assert.match(await page.locator('[data-tab=map]').textContent(), /^Potyczka/);
       assert.deepEqual(visible.heroes.map(h => h.id), [own.id]);
       assert.equal(visible.battle.length, 0);
       assert.equal(visible.library.length, 0);
@@ -140,6 +147,7 @@ async function main() {
     await refresh(two.page);
     await two.page.locator('#hero-editor .hero-retry').click();
     await two.page.waitForFunction(id => window.OneRingStore.getState().heroes.find(h => h.id === id)?.name === 'Bartek offline', heroTwo.id);
+    assert.equal(await two.page.locator('.hero-heading h2').textContent(), 'Bartek offline');
     console.log('PASS: offline edit retained and retried after recovery');
 
     const pending = two.page.locator('#hero-editor input[name="culture"]');

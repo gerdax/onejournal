@@ -200,11 +200,15 @@
   function renderList() {
     const state = store.getState(), ids = new Set(state.heroes.map(hero => hero.id));
     listCards.forEach((card, id) => { if (!ids.has(id)) { card.remove(); listCards.delete(id); } });
+    list.hidden = isPlayer();
+    host.querySelector(".hero-heading h2").textContent = isPlayer() ? state.heroes.find(hero => hero.id === store.access.heroId)?.name || "Bez imienia" : "Drużyna";
+    form.setAttribute("role", isPlayer() ? "form" : "tabpanel");
     const emptyPanel = host.querySelector("#hero-empty-panel");
     host.querySelector('[data-hero-action="new"]').hidden = isPlayer();
     if (!state.heroes.length) { form.hidden = true; emptyPanel.hidden = false; emptyPanel.textContent = isPlayer() ? "Nie przypisano arkusza bohatera." : "Nie ma jeszcze bohaterów. Użyj „Nowy bohater”, aby utworzyć pierwszy arkusz."; return; }
     form.hidden = false; emptyPanel.hidden = true;
     if (!editingId) { editingId = state.heroes[0].id; drawEditor(state.heroes[0]); }
+    if (isPlayer()) { list.replaceChildren(); listCards.clear(); return; }
     state.heroes.forEach(hero => {
       let card = listCards.get(hero.id);
       if (!card) { card = el("button", "hero-list-card"); card.type = "button"; card.role = "tab"; card.id = "hero-tab-" + hero.id; card.dataset.heroAction = "edit"; card.dataset.id = hero.id; card.setAttribute("aria-controls", "hero-editor"); listCards.set(hero.id, card); list.append(card); }
