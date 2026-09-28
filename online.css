@@ -31,3 +31,14 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 }
 
 .nav-actions { display: flex; gap: inherit; margin-left: auto; flex-shrink: 0; }
+
+.journal-entry { padding: 18px 2px 24px; font-size: 17px; line-height: 1.4; }
+.journal-time { display: block; margin-bottom: 8px; font-size: 15px; }
+.journal-entry h3 { font-size: 24px; margin: 0 0 12px; }
+.journal-entry .journal-flags { font-size: 15px; }
+.journal-dice { margin: 14px 0; }
+.journal-die { display: inline-block; }
+.journal-die svg { vertical-align: -.2em; }
+.journal-die.is-ignored { color: #a19d96; }
+.journal-entry .journal-result { margin-top: 18px; font-size: 19px; }
+.journal-total { color: #ba2108; font-weight: 700; }

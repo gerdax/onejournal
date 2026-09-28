@@ -201,7 +201,7 @@
     const state = store.getState(), ids = new Set(state.heroes.map(hero => hero.id));
     listCards.forEach((card, id) => { if (!ids.has(id)) { card.remove(); listCards.delete(id); } });
     list.hidden = isPlayer();
-    host.querySelector(".hero-heading h2").textContent = isPlayer() ? state.heroes.find(hero => hero.id === store.access.heroId)?.name || "Bez imienia" : "Drużyna";
+    host.querySelector(".hero-heading h2").textContent = isPlayer() ? "Mój bohater" : "Drużyna";
     form.setAttribute("role", isPlayer() ? "form" : "tabpanel");
     const emptyPanel = host.querySelector("#hero-empty-panel");
     host.querySelector('[data-hero-action="new"]').hidden = isPlayer();

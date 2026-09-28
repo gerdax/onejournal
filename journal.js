@@ -27,6 +27,17 @@
     const node = el('div', text, 'journal-toast'); node.setAttribute('role', 'status'); document.body.append(node);
     toastTimer = setTimeout(() => node.remove(), 6000);
   }
+  function die(face, ignored, feat) {
+    const node = el('span', null, ignored ? 'journal-die is-ignored' : 'journal-die');
+    const label = feat ? DiceRules.featLabel(face) : String(face);
+    node.setAttribute('aria-label', label + (ignored ? ' — nieuwzględniona w wyniku' : ''));
+    node.title = label + (ignored ? ' — nieuwzględniona w wyniku' : '');
+    if (feat && face >= 11) {
+      const paths = face === 11 ? '<path d="M -34 0 Q 0 -32 34 0 Q 0 32 -34 0Z"/><path d="M 0 -18 Q 12 0 0 18 Q -12 0 0 -18Z"/>' : '<path d="M 0 28 V -28 M -22 -8 L 0 -28 L 22 -8 M 0 5 L 21 -15"/>';
+      node.innerHTML = '<svg width="22" height="24" viewBox="-40 -36 80 72" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+    } else node.textContent = String(face);
+    return node;
+  }
   function render() {
     if (!store.access.role) { list.replaceChildren(); pending = []; sessionStorage.removeItem(pendingKey); return; }
     list.replaceChildren();
@@ -39,15 +50,32 @@
     }
     for (const entry of store.rolls.slice().reverse()) {
       const row = el('article', null, 'journal-entry'); row.dataset.rollId = entry.id;
-      row.append(el('h3', title(entry)), el('p', `${entry.result.sum} — ${verdict(entry.result)} · znaki sukcesu: ${entry.result.marks}`));
-      row.append(el('small', new Date(entry.createdAt || entry.at).toLocaleString('pl-PL')));
-      const details = el('details'); details.append(el('summary', 'Kości i ustawienia'));
-      details.append(el('p', 'Kość Działania: ' + entry.raw.feat.map(DiceRules.featLabel).join(', ')), el('p', 'Kości sukcesu: ' + (entry.raw.success.join(', ') || 'brak')));
-      const c = entry.config;
-      details.append(el('p', `Pula bazowa: ${c.baseDice}; premia/kara: ${c.bonus}; PT: ${c.target === '' || c.target == null ? 'brak' : c.target}; Kość Działania: ${{ normal: 'normalna', weary: 'osłabiona', favoured: 'wzmocniona' }[c.featMode]}`));
-      const flags = [['exhausted', 'Wyczerpanie'], ['miserable', 'Przygnębienie'], ['hope', 'Nadzieja'], ['inspired', 'Natchnienie'], ['enemyResource', 'Nienawiść/Determinacja']].filter(([key]) => c[key]).map(([, label]) => label);
-      if (flags.length) details.append(el('p', flags.join(' · ')));
-      row.append(details); list.append(row);
+      const c = entry.config, result = entry.result;
+      const time = el('time', new Date(entry.createdAt || entry.at).toLocaleString('pl-PL'), 'journal-time');
+      time.dateTime = entry.createdAt || entry.at;
+      row.append(time, el('h3', title(entry)));
+      row.append(el('p', `Pula bazowa: ${c.baseDice}; premia/kara: ${c.bonus};`, 'journal-pool'));
+      const flags = [];
+      if (c.featMode === 'weary') flags.push('Osłabienie');
+      if (c.featMode === 'favoured') flags.push('Wzmocnienie');
+      flags.push(...[['exhausted', 'Wyczerpanie'], ['miserable', 'Przygnębienie'], ['hope', 'Nadzieja'], ['inspired', 'Natchnienie'], ['enemyResource', 'Nienawiść/Determinacja']].filter(([key]) => c[key]).map(([, label]) => label));
+      if (flags.length) row.append(el('p', flags.join(' · '), 'journal-flags'));
+      const dice = el('div', null, 'journal-dice');
+      const feat = el('p', 'Kość Działania: ');
+      entry.raw.feat.forEach((face, index) => {
+        if (index) feat.append(document.createTextNode(', '));
+        feat.append(die(face, index !== result.selectedFeatIndex, true));
+      });
+      const success = el('p', 'Kości sukcesu: ');
+      entry.raw.success.forEach((face, index) => {
+        if (index) success.append(document.createTextNode(', '));
+        success.append(die(face, !!c.exhausted && face <= 3, false));
+      });
+      if (!entry.raw.success.length) success.append(document.createTextNode('brak'));
+      dice.append(feat, success); row.append(dice);
+      const outcome = el('p', null, 'journal-result');
+      outcome.append(el('strong', result.sum, 'journal-total'), document.createTextNode(`${result.target == null ? '' : '/' + result.target} — ${verdict(result)} · znaki sukcesu: ${result.marks}`));
+      row.append(outcome); list.append(row);
     }
     if (!pending.length && !store.rolls.length) list.append(el('p', 'Nie ma jeszcze rzutów.'));
   }
