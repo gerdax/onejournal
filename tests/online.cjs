@@ -52,8 +52,11 @@ async function main() {
       await page.locator('[data-tab="map"]').click();
       await page.waitForFunction(id => window.OneRingStore.selection === id, enemyId);
       assert.equal(await page.locator(`.map-token[data-id="${enemyId}"]`).evaluate(node => node.classList.contains('is-selected')), true);
-      assert.equal(await page.locator('#map-panel').textContent().then(text => text.includes('Ork Sekretny')), true);
-      assert.equal(await page.locator('#map-panel .map-resource').count(), 0);
+      assert.equal(await page.locator('#map-panel').textContent().then(text => text.includes('Ork Sekretny')), false);
+      assert.equal(await page.locator('#map-panel h3').textContent(), await page.evaluate(() => OneRingStore.getState().heroes[0].name));
+      assert.equal(await page.locator('#map-panel .map-panel-remove').count(), 0);
+      assert.equal(await page.locator('#leave-session').count(), 0);
+      assert.equal(await page.locator('#map-panel .map-resource').count(), 2);
       assert.equal(await page.locator('#map-panel .map-enemy-details').count(), 0);
       assert.equal(await page.locator('#map-hero-sheet form').count(), 1);
     }
@@ -70,6 +73,28 @@ async function main() {
     assert.deepEqual(fixture.document.state.map.positions[enemyId], before);
     assert.equal(fixture.document.selection, enemyId);
     console.log('PASS: shared GM selection and read-only player tokens');
+    assert.equal(await gm.page.locator('#leave-session').count(), 0);
+    await gm.page.evaluate(id => OneRingStore.toggleDefeated(id), enemyId);
+    await refresh(one.page); await refresh(two.page);
+    assert.equal(await one.page.locator(`.map-token[data-id="${enemyId}"].is-defeated`).count(), 1);
+    assert.equal(await two.page.locator(`.map-token[data-id="${enemyId}"].is-defeated`).count(), 1);
+    await one.page.locator('#map-panel .map-panel-action').click();
+    await one.page.waitForFunction(id => OneRingStore.getState().heroes.find(h => h.id === id).defeated, heroOne.id);
+    await refresh(two.page);await refresh(gm.page);
+    assert.equal(await two.page.locator(`.map-token[data-id="hero:${heroOne.id}"].is-defeated`).count(), 1);
+    assert.equal(await gm.page.locator(`.map-token[data-id="hero:${heroOne.id}"].is-defeated`).count(), 1);
+    await one.page.locator('#map-panel .map-panel-action').click();
+    await one.page.waitForFunction(id => !OneRingStore.getState().heroes.find(h => h.id === id).defeated, heroOne.id);
+    await one.page.locator('#map-panel select[name="stance"]').selectOption({index:1});
+    await one.page.waitForFunction(() => OneRingStore.getState().heroes[0].stance === document.querySelector('#map-panel select[name="stance"]').value);
+    const initialHope = await one.page.evaluate(() => OneRingStore.getState().heroes[0].hope);
+    await one.page.locator('#map-panel').getByRole('button', {name:'Zmniejsz nadzieja', exact:true}).click();
+    await one.page.waitForFunction(value => OneRingStore.getState().heroes[0].hope === value - 1, initialHope);
+    await one.page.locator('#map-panel input[name="wounded"]').check();
+    await one.page.waitForFunction(() => OneRingStore.getState().heroes[0].wounded);
+    assert.equal(await one.page.locator('#map-panel input[name="injury"]').isEnabled(), true);
+    console.log('PASS: own compact hero panel and public defeated tokens');
+
 
     await one.page.locator('[data-tab="heroes"]').click();
     const culture = one.page.locator('#hero-editor input[name="culture"]');

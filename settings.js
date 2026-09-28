@@ -5,6 +5,22 @@
   const host = document.getElementById('access-links'), status = document.getElementById('settings-status');
   let generation = 0;
   const el = (tag, text) => { const node = document.createElement(tag); if (text) node.textContent = text; return node; };
+  async function copyLink(input) {
+    const value = input.value;
+    if (!value) { status.textContent = 'Brak linku do skopiowania.'; return; }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Schowek niedostępny');
+      await navigator.clipboard.writeText(value);
+      status.textContent = 'Skopiowano link.';
+      return;
+    } catch (_) {
+      input.focus(); input.select();
+      try {
+        if (document.execCommand('copy')) { status.textContent = 'Skopiowano link.'; return; }
+      } catch (_) { /* The selected link remains available for manual copying. */ }
+      status.textContent = 'Nie można skopiować automatycznie. Link jest zaznaczony — skopiuj go ręcznie.';
+    }
+  }
   async function render() {
     const token = ++generation;
     try {
@@ -18,7 +34,7 @@
         if (grant?.active && grant.secret) {
           const url = new URL(location.pathname, location.origin); url.hash = 'access=' + grant.secret;
           const input = el('input'); input.readOnly = true; input.value = url.href; input.setAttribute('aria-label', 'Link bohatera ' + hero.name);
-          const copy = el('button', 'Kopiuj link'); copy.type = 'button'; copy.onclick = async () => { try { await navigator.clipboard.writeText(url.href); status.textContent = 'Skopiowano link.'; } catch (_) { input.select(); status.textContent = 'Zaznaczono link — skopiuj go ręcznie.'; } };
+          const copy = el('button', 'Kopiuj link'); copy.type = 'button'; copy.onclick = () => copyLink(input);
           row.append(input, copy);
           const revoke = el('button', 'Unieważnij'); revoke.type = 'button';
           revoke.onclick = () => act(() => store.revokeLink(hero.id), 'Unieważnić link i odebrać dostęp otwartym urządzeniom?');

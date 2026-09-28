@@ -380,7 +380,8 @@
     const controls = el('div', 'map-resource-controls'), minus = el('button', '', '−'), number = el('strong', '', `${value ?? 0} / ${max ?? 0}`), plus = el('button', '', '+');
     minus.type = plus.type = 'button'; minus.setAttribute('aria-label', `Zmniejsz ${title.toLowerCase()}`); plus.setAttribute('aria-label', `Zwiększ ${title.toLowerCase()}`);
     for (const [button, delta] of [[minus, -1], [plus, 1]]) button.addEventListener('click', () => {
-      run(() => store.adjustResource(id, field, delta));
+      const own = isPlayer() && !store.getParticipants().some(p => p.id === id) ? store.getState().heroes.find(h => 'hero:' + h.id === id) : null;
+      run(() => own ? store.saveHero({ id: own.id, [field]: Math.max(0, Math.min(max, Number(own[field] || 0) + delta)) }) : store.adjustResource(id, field, delta));
       const replacement = Array.from(panel.querySelectorAll('.map-resource')).find(node => node.dataset.field === field);
       if (replacement) replacement.querySelector(delta < 0 ? 'button:first-child' : 'button:last-child').focus();
     });
@@ -413,43 +414,48 @@
     enemySheet.hidden = true; enemyDetails.hidden = true; enemyNotes.hidden = true;
     panel.replaceChildren();
     panel.classList.remove('is-defeated');
-    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; panel.append(el('p', 'eyebrow', 'ZAZNACZENIE MISTRZA GRY'), el('h3', '', selected ? participants.find(p => p.id === selected)?.name || 'Brak' : 'Brak')); return; }
+    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; }
     if (store.loadError) { panel.append(el('p', 'eyebrow', 'BŁĄD ZAPISU'), el('h3', '', 'Nie można wczytać danych'), el('p', 'map-panel-help', 'Przywróć poprawną kopię zapasową, aby ponownie korzystać z mapy.')); return; }
-    if (!currentMap) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Stwórz mapę, by zobaczyć dodanych uczestników')); return; }
-    if (!participants.length) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dodaj bohatera lub przeciwnika do aktywnej walki.')); return; }
-    const names = displayNames(participants), index = participants.findIndex(p => p.id === selected), person = participants[index];
+    if (!currentMap && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Stwórz mapę, by zobaczyć dodanych uczestników')); return; }
+    if (!participants.length && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dodaj bohatera lub przeciwnika do aktywnej walki.')); return; }
+    const names = displayNames(participants), index = participants.findIndex(p => isPlayer() ? p.type === 'hero' && p.heroId === store.access.heroId : p.id === selected);
+    const ownHero = isPlayer() ? store.getState().heroes.find(h => h.id === store.access.heroId) : null;
+    const person = participants[index] || (ownHero ? { ...ownHero, id: 'hero:' + ownHero.id, heroId: ownHero.id, type: 'hero' } : null);
     if (!person) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dotknij znacznika postaci na mapie, aby zobaczyć zasoby i działania.')); return; }
     panel.classList.toggle('is-defeated', !!person.defeated);
     const heading = el('div', 'map-panel-heading');
-    const previous = el('button', 'map-cycle-prev', '‹'), next = el('button', 'map-cycle-next', '›');
-    const typeName = person.type === 'hero' ? 'bohater' : 'przeciwnik';
-    previous.type = next.type = 'button';
-    previous.setAttribute('aria-label', `Poprzedni ${typeName}`);
-    next.setAttribute('aria-label', `Następny ${typeName}`);
-    const peerCount = participants.filter(p => p.type === person.type).length;
-    previous.disabled = next.disabled = peerCount < 2;
-    for (const [button, direction] of [[previous, -1], [next, 1]]) button.addEventListener('click', () => {
-      selectParticipant(cycleParticipants(participants, names, person, direction));
-      const replacement = panel.querySelector(direction < 0 ? '.map-cycle-prev' : '.map-cycle-next');
-      if (replacement) replacement.focus();
-    });
-    const navigation = el('div', 'map-panel-navigation'); navigation.append(previous, next);
-    lastSelectedByType[person.type] = person.id;
-    const otherType = person.type === 'hero' ? 'enemy' : 'hero';
-    const otherParticipants = participants.filter(item => item.type === otherType);
-    const switchType = el('button', 'eyebrow map-switch-type', person.type === 'hero' ? 'BOHATER' : 'PRZECIWNIK');
-    switchType.type = 'button';
-    switchType.title = person.type === 'hero' ? 'Przełącz na przeciwnika' : 'Przełącz na bohatera';
-    switchType.setAttribute('aria-label', switchType.title);
-    switchType.disabled = !otherParticipants.length;
-    switchType.addEventListener('click', () => {
-      const target = otherParticipants.find(item => item.id === lastSelectedByType[otherType]) || otherParticipants[0];
-      if (!target) return;
-      selectParticipant(target.id);
-      panel.querySelector('.map-switch-type').focus();
-    });
-    heading.append(switchType, navigation);
-    panel.append(heading, el('h3', person.type === 'hero' ? '' : 'map-enemy-name', names[index]));
+    if (isPlayer()) heading.append(el('p', 'eyebrow', 'BOHATER'));
+    else {
+      const previous = el('button', 'map-cycle-prev', '‹'), next = el('button', 'map-cycle-next', '›');
+      const typeName = person.type === 'hero' ? 'bohater' : 'przeciwnik';
+      previous.type = next.type = 'button';
+      previous.setAttribute('aria-label', `Poprzedni ${typeName}`);
+      next.setAttribute('aria-label', `Następny ${typeName}`);
+      const peerCount = participants.filter(p => p.type === person.type).length;
+      previous.disabled = next.disabled = peerCount < 2;
+      for (const [button, direction] of [[previous, -1], [next, 1]]) button.addEventListener('click', () => {
+        selectParticipant(cycleParticipants(participants, names, person, direction));
+        const replacement = panel.querySelector(direction < 0 ? '.map-cycle-prev' : '.map-cycle-next');
+        if (replacement) replacement.focus();
+      });
+      const navigation = el('div', 'map-panel-navigation'); navigation.append(previous, next);
+      lastSelectedByType[person.type] = person.id;
+      const otherType = person.type === 'hero' ? 'enemy' : 'hero';
+      const otherParticipants = participants.filter(item => item.type === otherType);
+      const switchType = el('button', 'eyebrow map-switch-type', person.type === 'hero' ? 'BOHATER' : 'PRZECIWNIK');
+      switchType.type = 'button';
+      switchType.title = person.type === 'hero' ? 'Przełącz na przeciwnika' : 'Przełącz na bohatera';
+      switchType.setAttribute('aria-label', switchType.title);
+      switchType.disabled = !otherParticipants.length;
+      switchType.addEventListener('click', () => {
+        const target = otherParticipants.find(item => item.id === lastSelectedByType[otherType]) || otherParticipants[0];
+        if (!target) return;
+        selectParticipant(target.id);
+        panel.querySelector('.map-switch-type').focus();
+      });
+      heading.append(switchType, navigation);
+    }
+    panel.append(heading, el('h3', person.type === 'hero' ? '' : 'map-enemy-name', person.name));
     if (person.type === 'enemy' && person.distinctiveFeatures) panel.appendChild(el('p', 'map-enemy-features', person.distinctiveFeatures));
     if (person.type === 'hero') {
       const stanceLabel = el('label', 'map-panel-stance', 'Postawa');
@@ -511,6 +517,7 @@
     }
     const defeated = el('button', 'map-panel-action', person.defeated ? 'Przywróć do walki' : person.type === 'hero' ? 'Nieprzytomny / konający' : 'Oznacz jako pokonanego');
     defeated.type = 'button'; defeated.addEventListener('click', () => { run(() => store.toggleDefeated(person.id)); const replacement = panel.querySelector('.map-panel-action'); if (replacement) replacement.focus(); }); panel.appendChild(defeated);
+    if (isPlayer()) { defeated.disabled = !participants.some(p => p.id === person.id); return; }
     const remove = el('button', 'map-panel-remove', 'Usuń z potyczki'); remove.type = 'button'; remove.addEventListener('click', () => { if (root.confirm(`Usunąć ${names[index]} z potyczki?`)) run(() => store.removeParticipant(person.id)); }); panel.appendChild(remove);
   }
   function transform() { stage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`; }

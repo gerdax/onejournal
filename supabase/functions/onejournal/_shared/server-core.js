@@ -35,9 +35,9 @@ const publicMap = map => map ? {
   terrain: map.terrain.map(t => ({ kind: t.kind, x: t.x, y: t.y, r: t.r, rotation: t.rotation, variant: t.variant })),
   positions: clone(map.positions), ...(map.features ? { features: clone(map.features) } : {})
 } : null;
-const participantList = state => state.battle.map(e => ({ id: e.id, type: "enemy", heroId: null, name: e.name })).concat(state.heroParticipants.map(p => {
+const participantList = state => state.battle.map(e => ({ id: e.id, type: "enemy", heroId: null, name: e.name, defeated: !!e.defeated })).concat(state.heroParticipants.map(p => {
   const hero = state.heroes.find(h => h.id === p.heroId);
-  return { id: p.id, type: "hero", heroId: p.heroId, name: hero ? hero.name : "" };
+  return { id: p.id, type: "hero", heroId: p.heroId, name: hero ? hero.name : "", defeated: !!(hero && hero.defeated) };
 }));
 function accessFor(doc, uid) {
   const grant = doc.grants.find(x => x.uid === uid && x.active);
@@ -92,6 +92,14 @@ function restoredRolls(raw, uid) {
 function validateMethodInput(method, args, access, doc, heroVersion) {
   if (!GM_METHODS.has(method) || !Array.isArray(args) || args.length > 3) fail(400, "Nieznana komenda.");
   if (access.role === "player") {
+    if (method === "adjustResource") {
+      if (args.length !== 3 || args[0] !== "hero:" + access.heroId || !doc.state.heroParticipants.some(p => p.id === args[0] && p.heroId === access.heroId) || !["endurance", "hope"].includes(args[1]) || !Number.isFinite(args[2])) fail(403, "Możesz zmieniać tylko Wytrzymałość i Nadzieję swojego bohatera w walce.");
+      return;
+    }
+    if (method === "toggleDefeated") {
+      if (args.length !== 1 || args[0] !== "hero:" + access.heroId || !doc.state.heroParticipants.some(p => p.id === args[0] && p.heroId === access.heroId)) fail(403, "Możesz zmienić stan tylko swojego bohatera w walce.");
+      return;
+    }
     if (method !== "saveHero" || !isObject(args[0]) || args[0].id !== access.heroId || !doc.state.heroes.some(h => h.id === access.heroId)) fail(403, "Brak uprawnień do tej komendy.");
     const assigned = doc.state.heroes.find(h => h.id === access.heroId);
     if (Object.keys(args[0]).some(key => key !== "id" && (key === "defeated" || !own(assigned, key)))) fail(403, "To pole może zmieniać tylko mistrz gry.");
@@ -173,7 +181,12 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
           }
           if (request.method === "deleteHero") delete doc.heroVersions[request.args[0]];
           publicChange = !["addLibrary", "removeLibrary", "importLibrary", "setEnemyWound"].includes(request.method);
-          if (request.method === "adjustResource" || request.method === "toggleDefeated" || request.method === "removeParticipant" || request.method === "moveToken") {
+          if (request.method === "setEnemyWound") {
+            const before = oldState.battle.find(enemy => enemy.id === request.args[0]);
+            const after = doc.state.battle.find(enemy => enemy.id === request.args[0]);
+            publicChange = !!before && !!after && (!!before.defeated !== !!after.defeated);
+          }
+          if (request.method === "adjustResource" || request.method === "removeParticipant" || request.method === "moveToken") {
             const target = request.args[0];
             publicChange = !!oldState.heroParticipants.some(p => p.id === target) || request.method === "moveToken" || request.method === "removeParticipant";
           }

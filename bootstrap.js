@@ -3,7 +3,6 @@
   const main = document.querySelector('main'), screen = document.getElementById('access-screen');
   const message = document.getElementById('access-message'), status = document.getElementById('connection-status');
   const retry = document.getElementById('access-retry'), reconnect = document.getElementById('reconnect');
-  const leave = document.getElementById('leave-session');
   let store, transport, started = false, connecting = false;
   function load(src) { return new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = () => reject(new Error('Nie udało się wczytać aplikacji. Odśwież stronę.')); document.body.append(script); }); }
   function updateConnection() {
@@ -43,7 +42,7 @@
         for (const name of ['opponents', 'settings']) { const tab = document.querySelector(`[data-tab="${name}"]`); tab.hidden = true; tab.disabled = true; }
       }
       for (const src of ['vendor/Sortable.min.js', 'heroes.js?v=oj1', 'map.js?v=oj1', 'app.js?v=oj1', 'dice-rules.js?v=oj1', 'journal.js?v=1', 'dice-engine.js?v=oj1', 'dice-roller.js?v=oj1', 'settings.js?v=1']) await load(src);
-      started = true; screen.hidden = true; main.hidden = false; leave.hidden = false;
+      started = true; screen.hidden = true; main.hidden = false;
       document.getElementById('journal-open').hidden = false;
       updateConnection();
     } catch (error) {
@@ -54,10 +53,6 @@
   }
   retry.addEventListener('click', boot);
   reconnect.addEventListener('click', () => store?.refresh().catch(() => {}));
-  leave.addEventListener('click', () => {
-    Object.keys(sessionStorage).filter(key => key.startsWith('onejournal:pending-rolls:' + location.pathname + ':')).forEach(key => sessionStorage.removeItem(key));
-    transport.clearSession(); location.replace(location.pathname);
-  });
   window.addEventListener('offline', () => store?.markOffline());
   window.addEventListener('online', () => store?.refresh().catch(() => {}));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) store?.refresh().catch(() => {}); });
