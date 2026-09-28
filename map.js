@@ -410,17 +410,19 @@
   function renderPanel(participants) {
     doc.getElementById('map-center').disabled = !currentMap || !participants.some(person => person.id === selected);
     const selectedHero = participants.find(p => p.id === selected && p.type === "hero");
-    heroSheet.show(isPlayer() ? store.access?.heroId : !store.loadError && currentMap && selectedHero ? selectedHero.heroId : null);
+    const ownParticipant = isPlayer() ? participants.find(p => p.type === 'hero' && p.heroId === store.access.heroId) : null;
+    panel.hidden = isPlayer() && !ownParticipant;
+    section.querySelector('.map-layout').classList.toggle('without-hero-panel', panel.hidden);
+    heroSheet.show(isPlayer() ? ownParticipant?.heroId || null : !store.loadError && currentMap && selectedHero ? selectedHero.heroId : null);
     enemySheet.hidden = true; enemyDetails.hidden = true; enemyNotes.hidden = true;
     panel.replaceChildren();
     panel.classList.remove('is-defeated');
-    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; }
+    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; if (!ownParticipant) return; }
     if (store.loadError) { panel.append(el('p', 'eyebrow', 'BŁĄD ZAPISU'), el('h3', '', 'Nie można wczytać danych'), el('p', 'map-panel-help', 'Przywróć poprawną kopię zapasową, aby ponownie korzystać z mapy.')); return; }
     if (!currentMap && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Stwórz mapę, by zobaczyć dodanych uczestników')); return; }
     if (!participants.length && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dodaj bohatera lub przeciwnika do aktywnej walki.')); return; }
     const names = displayNames(participants), index = participants.findIndex(p => isPlayer() ? p.type === 'hero' && p.heroId === store.access.heroId : p.id === selected);
-    const ownHero = isPlayer() ? store.getState().heroes.find(h => h.id === store.access.heroId) : null;
-    const person = participants[index] || (ownHero ? { ...ownHero, id: 'hero:' + ownHero.id, heroId: ownHero.id, type: 'hero' } : null);
+    const person = participants[index];
     if (!person) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dotknij znacznika postaci na mapie, aby zobaczyć zasoby i działania.')); return; }
     panel.classList.toggle('is-defeated', !!person.defeated);
     const heading = el('div', 'map-panel-heading');

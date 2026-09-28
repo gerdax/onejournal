@@ -176,13 +176,32 @@ async function main() {
       assert.equal(await gm.page.locator('.journal-dialog .journal-entry').count(), 2);
     } finally { await renewed.context.close(); }
     console.log('PASS: public hero rolls, private enemy rolls, duplicate suppression');
+    await gm.page.evaluate(id => window.OneRingStore.removeParticipant('hero:' + id), heroTwo.id);
+    await refresh(two.page);
+    await two.page.locator('[data-tab="map"]').click();
+    assert.equal(await two.page.locator('#map-panel').isVisible(), false);
+    assert.equal(await two.page.locator('#map-hero-sheet').isVisible(), false);
+    await two.page.reload();
+    await two.page.locator('main').waitFor({state:'visible'});
+    await two.page.locator('[data-tab="map"]').click();
+    assert.equal(await two.page.locator('#map-panel').isVisible(), false);
+    assert.equal(await two.page.locator('#map-hero-sheet').isVisible(), false);
+    await two.page.locator('[data-tab="heroes"]').click();
+    assert.equal(await two.page.locator('#hero-editor input[name="name"]').inputValue(), 'Bartek offline');
+    await gm.page.evaluate(id => window.OneRingStore.addHero(id), heroTwo.id);
+    await refresh(two.page);
+    await two.page.locator('[data-tab="map"]').click();
+    assert.equal(await two.page.locator('#map-panel').isVisible(), true);
+    assert.equal(await two.page.locator('#map-hero-sheet').isVisible(), true);
     await gm.page.evaluate(() => window.OneRingStore.clearEncounter());
     await refresh(two.page);
     await two.page.locator('[data-tab="map"]').click();
     assert.equal((await state(two.page)).map, null);
-    assert.equal(await two.page.locator('#map-hero-sheet form').count(), 1);
-    assert.equal(await two.page.locator('#map-hero-sheet input[name="name"]').inputValue(), 'Bartek offline');
-    console.log('PASS: player sheet remains on map view without encounter');
+    assert.equal(await two.page.locator('#map-panel').isVisible(), false);
+    assert.equal(await two.page.locator('#map-hero-sheet').isVisible(), false);
+    await two.page.locator('[data-tab="heroes"]').click();
+    assert.equal(await two.page.locator('#hero-editor input[name="name"]').inputValue(), 'Bartek offline');
+    console.log('PASS: player map panels follow participation; My hero remains available');
     assert.deepEqual(errors, []);
   } finally { await gm.context.close(); await one.context.close(); await two.context.close(); }
 }
