@@ -23,7 +23,11 @@
     return result.passed === true ? 'sukces' : result.passed === false ? 'porażka' : 'bez PT';
   }
   function title(entry) { return (entry.authorRole === 'gm' && entry.actor === 'hero' ? 'MG za ' : '') + (entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Wróg · prywatny rzut MG' : 'Bohater')); }
-  function summary(entry) { return `${title(entry)}: ${entry.result.sum}${verdict(entry.result) === 'bez PT' ? '' : ' — ' + verdict(entry.result)}`; }
+  function resultSuffix(result) {
+    const interpretation = verdict(result);
+    return `${result.target == null ? '' : '/' + result.target}${interpretation === 'bez PT' ? '' : ' — ' + interpretation} · znaki sukcesu: ${result.marks}`;
+  }
+  function summary(entry) { return `${entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Wróg · prywatny rzut MG' : 'Bohater')}: ${entry.result.sum}${resultSuffix(entry.result)}`; }
   function toast(text) {
     document.querySelector('.journal-toast')?.remove(); clearTimeout(toastTimer);
     const node = el('div', text, 'journal-toast'); node.setAttribute('role', 'status'); document.body.append(node);
@@ -83,8 +87,7 @@
       dice.append(feat, success); row.append(dice);
       const outcome = el('p', null, 'journal-result');
       const successful = result.automaticSuccess || result.passed === true;
-      const interpretation = verdict(result);
-      outcome.append(el('strong', result.sum, 'journal-total' + (successful ? ' is-success' : '')), document.createTextNode(`${result.target == null ? '' : '/' + result.target}${interpretation === 'bez PT' ? '' : ' — ' + interpretation} · znaki sukcesu: ${result.marks}`));
+      outcome.append(el('strong', result.sum, 'journal-total' + (successful ? ' is-success' : '')), document.createTextNode(resultSuffix(result)));
       row.append(outcome); list.append(row);
     }
     if (!pending.length && !store.rolls.length) list.append(el('p', 'Nie ma jeszcze rzutów.'));

@@ -13,7 +13,7 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 .journal-entry h3, .journal-entry p { margin: 4px 0; }
 .journal-entry summary { cursor: pointer; }
 .journal-entry pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
-.journal-toast { position: fixed; z-index: 2147483647; inset: max(16px, env(safe-area-inset-top)) auto auto 50%; transform: translateX(-50%); margin: 0; width: max-content; max-width: min(560px, calc(100vw - 32px)); box-sizing: border-box; background: #29251f; color: #fffaf0; padding: 12px 18px; border: 0; border-radius: 8px; pointer-events: none; overflow-wrap: anywhere; }
+.journal-toast { position: fixed; z-index: 2147483647; inset: max(16px, env(safe-area-inset-top)) auto auto 50%; transform: translateX(-50%); margin: 0; width: max-content; max-width: min(560px, calc(100vw - 32px)); box-sizing: border-box; background: #29251f; color: #fffaf0; font-size: .8rem; padding: 9.6px 14.4px; border: 0; border-radius: 6.4px; pointer-events: none; overflow-wrap: anywhere; }
 .roll-publication { padding: 8px; border: 1px solid #b7aa94; border-radius: 6px; }
 .dice-hero-picker { display: grid; gap: 6px; margin: 10px 0; }
 .dice-hero-picker select { width: 100%; padding: 8px; }
