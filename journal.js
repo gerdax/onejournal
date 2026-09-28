@@ -15,7 +15,7 @@
   const body = el('div', null, 'journal-body'); body.append(notice, list);
   dialog.append(head, body); document.body.append(dialog);
   close.onclick = () => dialog.close();
-  document.getElementById('journal-open').onclick = () => { render(); dialog.showModal(); };
+  document.getElementById('journal-open').onclick = () => { render(); dialog.showModal(); body.scrollTop = 0; };
   function persist() { try { sessionStorage.setItem(pendingKey, JSON.stringify(pending)); } catch (_) {} }
   function verdict(result) {
     if (result.automaticFailure) return 'automatyczna porażka';
