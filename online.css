@@ -31,5 +31,3 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 }
 
 .nav-actions { display: flex; gap: inherit; margin-left: auto; flex-shrink: 0; }
-
-.map-layout.without-hero-panel { grid-template-columns: minmax(0, 1fr); }

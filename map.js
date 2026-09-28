@@ -411,13 +411,12 @@
     doc.getElementById('map-center').disabled = !currentMap || !participants.some(person => person.id === selected);
     const selectedHero = participants.find(p => p.id === selected && p.type === "hero");
     const ownParticipant = isPlayer() ? participants.find(p => p.type === 'hero' && p.heroId === store.access.heroId) : null;
-    panel.hidden = isPlayer() && !ownParticipant;
-    section.querySelector('.map-layout').classList.toggle('without-hero-panel', panel.hidden);
+    panel.hidden = false;
     heroSheet.show(isPlayer() ? ownParticipant?.heroId || null : !store.loadError && currentMap && selectedHero ? selectedHero.heroId : null);
     enemySheet.hidden = true; enemyDetails.hidden = true; enemyNotes.hidden = true;
     panel.replaceChildren();
     panel.classList.remove('is-defeated');
-    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; if (!ownParticipant) return; }
+    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; if (!ownParticipant) { panel.append(el('p', 'eyebrow', 'BOHATER POZA POTYCZKĄ'), el('p', 'map-panel-help', 'Twój bohater nie uczestniczy w potyczce. Mistrz gry może go do niej dodać.')); return; } }
     if (store.loadError) { panel.append(el('p', 'eyebrow', 'BŁĄD ZAPISU'), el('h3', '', 'Nie można wczytać danych'), el('p', 'map-panel-help', 'Przywróć poprawną kopię zapasową, aby ponownie korzystać z mapy.')); return; }
     if (!currentMap && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Stwórz mapę, by zobaczyć dodanych uczestników')); return; }
     if (!participants.length && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dodaj bohatera lub przeciwnika do aktywnej walki.')); return; }
