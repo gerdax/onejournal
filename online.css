@@ -54,5 +54,3 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 
 body[data-role="player"] #heroes > .hero-heading,
 body[data-role="player"] #map > .map-heading { display: none; }
-
-.settings-dialog { width: calc(100vw - 32px); max-width: none; }
