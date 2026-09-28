@@ -47,3 +47,12 @@ test('hero save carries draft version; a conflict refreshes server data and reje
   await store.connect();await assert.rejects(store.saveHero({id:'h',name:'draft'},1),/conflict/);
   assert.equal(store.heroVersions.h,2);assert.equal(store.canWrite,true);
 });
+
+test('response started before offline cannot re-enable editing',async()=>{
+  const old=deferred();let calls=0;
+  const store=createStore({request:async()=>++calls===2?old.promise:snapshot()});
+  await store.connect();const pending=store.refresh();store.markOffline();
+  old.resolve(snapshot(2));await assert.rejects(pending);
+  assert.equal(store.canWrite,false);assert.equal(store.heroVersions.h,1);
+  await store.refresh();assert.equal(store.canWrite,true);
+});

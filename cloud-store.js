@@ -71,7 +71,7 @@
         if (!refreshing) refreshing = request({ action: 'snapshot' }).then(accept).finally(() => { refreshing = null; });
         return refreshing;
       },
-      markOffline() { if (connection !== 'revoked') { connection = 'offline'; emit(); } },
+      markOffline() { if (connection !== 'revoked') { epoch++; connection = 'offline'; emit(); } },
       stop() { epoch++; stopped = true; transport.stop?.(); connection = 'offline'; emit(); },
       exportBackup() { return enqueue({ action: 'export' }); },
       listLinks() { return enqueue({ action: 'links' }); },
