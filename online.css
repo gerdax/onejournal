@@ -22,3 +22,10 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 .tabs .nav-icon { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; flex-shrink: 0; }
 .nav-icon svg { width: 24px; height: 24px; }
 .tabs .nav-icon:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+/* Keep the compact navigation beyond the old 480px breakpoint. Expanding
+   spacing only when there is room avoids a wider viewport adding a row. */
+@media (max-width: 760px) {
+  .tabs { gap: 4px; }
+  .tabs .tab { padding-inline: 8px; font-size: 15px; white-space: nowrap; }
+}
