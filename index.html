@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="heroes.css?v=90" />
     <link rel="stylesheet" href="map.css?v=74" />
     <link rel="stylesheet" href="dice-roller.css?v=95" />
-    <link rel="stylesheet" href="online.css?v=12" />
+    <link rel="stylesheet" href="online.css?v=13" />
   </head>
   <body>
     <section id="access-screen" class="access-screen"><h1>onejournal</h1><p id="access-message">Sprawdzanie dostępu do gry…</p><button id="access-retry" type="button" hidden>Spróbuj ponownie</button></section>
@@ -32,7 +32,7 @@
         <button class="tab" data-tab="map">Potyczka <span id="map-count">0</span></button>
         <div class="nav-actions">
         <button class="tab nav-icon" id="journal-open" type="button" aria-label="Dziennik rzutów" title="Dziennik rzutów" aria-haspopup="dialog" hidden><svg width="24" height="24" viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="15" height="15" rx="3" transform="rotate(-10 10.5 10.5)"/><path d="m19 10 4 .7a3 3 0 0 1 2.4 3.5l-1.7 9.3a3 3 0 0 1-3.5 2.4l-9.3-1.7a3 3 0 0 1-2.4-3.5l.2-1"/><g fill="currentColor" stroke="none"><circle cx="7" cy="7" r="1.3"/><circle cx="10.5" cy="10.5" r="1.3"/><circle cx="14" cy="14" r="1.3"/><circle cx="20" cy="15" r="1.3"/><circle cx="16" cy="21" r="1.3"/></g></svg></button>
-        <button class="tab nav-icon" data-tab="settings" aria-label="Ustawienia" title="Ustawienia"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="m9 3 1-2h4l1 2 2 1 2-.2 2 3-1.2 2v3l1.2 2-2 3-2-.2-2 1-1 2h-4l-1-2-2-1-2 .2-2-3 1.2-2v-3L3 7l2-3 2 .2Z" transform="translate(0 1)"/><circle cx="12" cy="12" r="3.2"/></svg></button>
+        <button class="tab nav-icon" id="settings-open" type="button" aria-haspopup="dialog" aria-label="Ustawienia" title="Ustawienia"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="m9 3 1-2h4l1 2 2 1 2-.2 2 3-1.2 2v3l1.2 2-2 3-2-.2-2 1-1 2h-4l-1-2-2-1-2 .2-2-3 1.2-2v-3L3 7l2-3 2 .2Z" transform="translate(0 1)"/><circle cx="12" cy="12" r="3.2"/></svg></button>
         </div>
       </nav>
 
@@ -78,20 +78,20 @@
 
       <section id="heroes" class="page active"></section>
       <section id="map" class="page"></section>
-      <section id="settings" class="page" hidden><h2>Ustawienia</h2><div class="connection-settings"><span id="connection-status" role="status">Łączenie…</span><button id="reconnect" type="button" hidden>Połącz ponownie</button></div><div id="gm-settings" hidden><p>Link daje dostęp do przypisanego bohatera. Nowy link unieważnia poprzedni i otwarte przez niego sesje.</p><div id="access-links"></div><p id="settings-status" role="status"></p>
+      <dialog id="settings" class="settings-dialog" aria-labelledby="settings-heading"><div class="journal-head"><h2 id="settings-heading">Ustawienia</h2><button type="button" class="journal-close" id="settings-close" aria-label="Zamknij ustawienia" title="Zamknij">×</button></div><div class="journal-body"><div class="connection-settings"><span id="connection-status" role="status">Łączenie…</span><button id="reconnect" type="button" hidden>Połącz ponownie</button></div><div id="gm-settings" hidden><p>Link daje dostęp do przypisanego bohatera. Nowy link unieważnia poprzedni i otwarte przez niego sesje.</p><div id="access-links"></div><p id="settings-status" role="status"></p>
       <footer class="backup-actions" aria-label="Kopia wszystkich danych">
         <button class="text-button" id="export-backup">Eksportuj bazę</button>
         <button class="text-button" id="restore-backup">Wgraj bazę</button>
         <input id="backup-file" type="file" accept="application/json,.json" hidden />
         <span class="footer-copyright">(C) 2026</span>
       </footer>
-      </div></section>
+      </div></div></dialog>
     </main>
     <template id="battle-card-template"><article class="battle-card"><div class="card-top"><div><p class="enemy-tier"></p><h3 class="enemy-name"></h3><p class="enemy-kind"></p></div><div class="card-actions"><button class="icon-button clone" title="Dodaj kopię">⊕</button><button class="icon-button remove" title="Usuń ze starcia">×</button></div></div><div class="combat-stats"><div class="meter"><p>WYTRZYMAŁOŚĆ</p><strong class="endurance-display"></strong><div class="adjusters"><button data-stat="endurance" data-change="-5">−5</button><button data-stat="endurance" data-change="-1">−1</button><button data-stat="endurance" data-change="1">+1</button><button data-stat="endurance" data-change="5">+5</button></div></div><div class="meter hate-meter"><p class="resource-display-label">NIENAWIŚĆ</p><strong class="hate-display"></strong><div class="adjusters"><button data-stat="hate" data-change="-1">−1</button><button data-stat="hate" data-change="1">+1</button></div></div></div><div class="facts"><span>Zajadłość <b class="fierceness-display"></b></span><span>Potęga <b class="might-display"></b></span><span>Obrona <b class="parry-display"></b></span><span>Pancerz <b class="armour-display"></b></span></div><p class="attack-display detail"></p><p class="traits-display detail"></p><button class="defeated">Oznacz jako pokonanego</button></article></template>
     <script src="config.js"></script>
     <script src="state.js?v=oj1"></script>
     <script src="cloud-store.js?v=1"></script>
     <script src="supabase-adapter.js?v=1"></script>
-    <script src="bootstrap.js?v=11"></script>
+    <script src="bootstrap.js?v=12"></script>
   </body>
 </html>

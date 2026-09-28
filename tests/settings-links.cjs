@@ -30,7 +30,7 @@ async function main() {
     page.on('dialog', dialog => dialog.accept());
     await page.goto(fixture.url + '/#access=' + fixture.secrets.gm, { waitUntil: 'domcontentloaded' });
     await page.locator('main').waitFor({ state: 'visible' });
-    await page.locator('[data-tab="settings"]').click();
+    await page.locator('#settings-open').click();
     await page.locator('#access-links article').first().waitFor();
     const rows = page.locator('#access-links article');
     assert.equal(await rows.count(), 2);

@@ -42,11 +42,12 @@ async function main() {
       assert.equal(visible.battle.length, 0);
       assert.equal(visible.library.length, 0);
       assert.equal(await page.locator('[data-tab="opponents"]').isVisible(), false);
-      assert.equal(await page.locator('[data-tab="settings"]').isVisible(), true);
+      assert.equal(await page.locator('#settings-open').isVisible(), true);
       await page.getByRole('button', {name:'Ustawienia', exact:true}).click();
       assert.equal(await page.locator('#connection-status').isVisible(), true);
       assert.equal(await page.locator('#gm-settings').isVisible(), false);
       assert.equal(await page.locator('.online-bar').count(), 0);
+      await page.getByRole('button', {name:'Zamknij ustawienia', exact:true}).click();
       await page.getByRole('button', {name:'Dziennik rzutów', exact:true}).click();
       assert.equal(await page.locator('.journal-dialog').isVisible(), true);
       await page.keyboard.press('Escape');
@@ -120,13 +121,14 @@ async function main() {
     assert.equal((await state(gm.page)).heroes.find(h => h.id === heroOne.id).culture, 'Shire updated');
     console.log('PASS: own hero edit reaches GM');
 
-    await gm.page.locator('[data-tab="settings"]').click();
+    await gm.page.locator('#settings-open').click();
     await gm.page.locator('#access-links article').first().waitFor();
     assert.equal(await gm.page.locator('#access-links article').count(), 2);
     await gm.page.locator('#access-links article').first().getByRole('button', { name: 'Wygeneruj nowy link' }).click();
     await gm.page.getByText('Zapisano zmianę dostępu.').waitFor();
     const firstLink = await gm.page.locator('#access-links article').first().locator('input').inputValue();
     assert.match(firstLink, /#access=/);
+    await gm.page.getByRole('button', {name:'Zamknij ustawienia', exact:true}).click();
     console.log('PASS: GM settings link rotation');
 
     await refresh(one.page).catch(() => {});

@@ -1,6 +1,12 @@
 (function () {
   'use strict';
   const store = window.OneRingStore;
+  const dialog = document.getElementById('settings');
+  document.getElementById('settings-open').onclick = () => {
+    dialog.showModal(); dialog.querySelector('.journal-body').scrollTop = 0;
+    if (store.access.role === 'gm') render();
+  };
+  document.getElementById('settings-close').onclick = () => dialog.close();
   if (store.access.role !== 'gm') return;
   const host = document.getElementById('access-links'), status = document.getElementById('settings-status');
   let generation = 0;
@@ -54,6 +60,5 @@
     catch (error) { status.textContent = error.message; }
     finally { host.querySelectorAll('button').forEach(button => { button.disabled = !store.canWrite; }); }
   }
-  document.addEventListener('one-ring:tab', event => { if (event.detail === 'settings') render(); });
   store.subscribe(() => { if (store.access.role !== 'gm') host.replaceChildren(); host.querySelectorAll('button').forEach(button => { button.disabled = !store.canWrite; }); });
 })();
