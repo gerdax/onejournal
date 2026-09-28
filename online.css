@@ -41,4 +41,5 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 .journal-die svg { vertical-align: -.2em; }
 .journal-die.is-ignored { color: #a19d96; }
 .journal-entry .journal-result { margin-top: 18px; font-size: 19px; }
-.journal-total { color: #ba2108; font-weight: 700; }
+.journal-total { font-weight: 700; }
+.journal-total.is-success { color: #ba2108; }

@@ -21,7 +21,7 @@
     return result.passed === true ? 'sukces' : result.passed === false ? 'porażka' : 'bez PT';
   }
   function title(entry) { return (entry.authorRole === 'gm' && entry.actor === 'hero' ? 'MG za ' : '') + (entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Wróg · prywatny rzut MG' : 'Bohater')); }
-  function summary(entry) { return `${title(entry)}: ${entry.result.sum} — ${verdict(entry.result)}`; }
+  function summary(entry) { return `${title(entry)}: ${entry.result.sum}${verdict(entry.result) === 'bez PT' ? '' : ' — ' + verdict(entry.result)}`; }
   function toast(text) {
     document.querySelector('.journal-toast')?.remove(); clearTimeout(toastTimer);
     const node = el('div', text, 'journal-toast'); node.setAttribute('role', 'status'); document.body.append(node);
@@ -44,7 +44,7 @@
     for (const entry of pending) {
       const row = el('article', null, 'journal-entry'); row.append(el('h3', 'Rzut oczekuje na publikację'));
       const result = DiceRules.interpretRoll(entry.config, entry.raw);
-      row.append(el('p', `Wynik: ${result.sum} — ${verdict(result)}. Ponowienie nie losuje nowych kości.`));
+      row.append(el('p', `Wynik: ${result.sum}${verdict(result) === 'bez PT' ? '' : ' — ' + verdict(result)}. Ponowienie nie losuje nowych kości.`));
       const retry = el('button', publishing.has(entry.id) ? 'Publikowanie…' : 'Ponów publikację'); retry.disabled = !store.canWrite || publishing.has(entry.id);
       retry.onclick = () => publish(entry.id).catch(() => {}); row.append(retry); list.append(row);
     }
@@ -74,7 +74,9 @@
       if (!entry.raw.success.length) success.append(document.createTextNode('brak'));
       dice.append(feat, success); row.append(dice);
       const outcome = el('p', null, 'journal-result');
-      outcome.append(el('strong', result.sum, 'journal-total'), document.createTextNode(`${result.target == null ? '' : '/' + result.target} — ${verdict(result)} · znaki sukcesu: ${result.marks}`));
+      const successful = result.automaticSuccess || result.passed === true;
+      const interpretation = verdict(result);
+      outcome.append(el('strong', result.sum, 'journal-total' + (successful ? ' is-success' : '')), document.createTextNode(`${result.target == null ? '' : '/' + result.target}${interpretation === 'bez PT' ? '' : ' — ' + interpretation} · znaki sukcesu: ${result.marks}`));
       row.append(outcome); list.append(row);
     }
     if (!pending.length && !store.rolls.length) list.append(el('p', 'Nie ma jeszcze rzutów.'));
