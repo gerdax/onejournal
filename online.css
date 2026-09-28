@@ -43,3 +43,11 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 .journal-entry .journal-result { margin-top: 18px; font-size: 19px; }
 .journal-total { font-weight: 700; }
 .journal-total.is-success { color: #ba2108; }
+
+.journal-dialog { padding: 0; overflow: hidden; }
+.journal-dialog[open] { display: flex; flex-direction: column; }
+.journal-head { flex: none; padding: 20px; gap: 16px; }
+.journal-head h2 { margin: 0; }
+.journal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px 20px; }
+.journal-head .journal-close { flex: none; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; font: 30px/1 Arial, sans-serif; }
+.journal-close:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }

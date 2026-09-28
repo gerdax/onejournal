@@ -8,10 +8,12 @@
   const seen = new Set(store.rolls.map(roll => roll.id));
   const el = (tag, text, className) => { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; };
   const dialog = el('dialog', null, 'journal-dialog'); dialog.setAttribute('aria-label', 'Dziennik rzutów');
-  const head = el('div', null, 'journal-head'), close = el('button', 'Zamknij');
+  const head = el('div', null, 'journal-head'), close = el('button', '×', 'journal-close');
+  close.type = 'button'; close.setAttribute('aria-label', 'Zamknij dziennik rzutów'); close.title = 'Zamknij';
   head.append(el('h2', 'Dziennik rzutów'), close);
   const list = el('div'), notice = el('p'); notice.setAttribute('role', 'status');
-  dialog.append(head, notice, list); document.body.append(dialog);
+  const body = el('div', null, 'journal-body'); body.append(notice, list);
+  dialog.append(head, body); document.body.append(dialog);
   close.onclick = () => dialog.close();
   document.getElementById('journal-open').onclick = () => { render(); dialog.showModal(); };
   function persist() { try { sessionStorage.setItem(pendingKey, JSON.stringify(pending)); } catch (_) {} }
