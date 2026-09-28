@@ -35,7 +35,15 @@ async function main() {
       assert.equal(visible.battle.length, 0);
       assert.equal(visible.library.length, 0);
       assert.equal(await page.locator('[data-tab="opponents"]').isVisible(), false);
-      assert.equal(await page.locator('[data-tab="settings"]').isVisible(), false);
+      assert.equal(await page.locator('[data-tab="settings"]').isVisible(), true);
+      await page.getByRole('button', {name:'Ustawienia', exact:true}).click();
+      assert.equal(await page.locator('#connection-status').isVisible(), true);
+      assert.equal(await page.locator('#gm-settings').isVisible(), false);
+      assert.equal(await page.locator('.online-bar').count(), 0);
+      await page.getByRole('button', {name:'Dziennik rzutów', exact:true}).click();
+      assert.equal(await page.locator('.journal-dialog').isVisible(), true);
+      await page.keyboard.press('Escape');
+      await page.locator('[data-tab="heroes"]').click();
       assert.equal(await page.locator('#hero-editor input[name="name"]').inputValue(), own.name);
       assert.equal(await page.evaluate(() => document.body.textContent.includes('Tajne notatki') || document.body.textContent.includes('Sekret MG')), false);
       assert.equal(await page.evaluate(id => window.OneRingStore.getState().heroes.some(h => h.id === id), other.id), false);

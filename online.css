@@ -1,8 +1,6 @@
 [hidden] { display: none !important; }
-.online-bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #cfc6b4; background: #f4f0e8; flex-wrap: wrap; }
-.online-bar strong { font-family: Fraunces, Georgia, serif; font-size: 24px; }
 #connection-status { flex: 1; font-size: 13px; }
-.online-bar button, .access-screen button, .access-link button, .journal-dialog button { padding: 8px 12px; border: 1px solid #b7aa94; border-radius: 6px; background: #fffaf0; color: #29251f; cursor: pointer; }
+.connection-settings button, .access-screen button, .access-link button, .journal-dialog button { padding: 8px 12px; border: 1px solid #b7aa94; border-radius: 6px; background: #fffaf0; color: #29251f; cursor: pointer; }
 .access-screen { max-width: 620px; margin: 12vh auto; padding: 24px; }
 body[data-connection="offline"] #connection-status, body[data-connection="revoked"] #connection-status { color: #9b2f20; font-weight: bold; }
 .access-link { margin: 20px 0; padding: 18px; border: 1px solid #cfc6b4; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px; }
@@ -19,4 +17,8 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 .roll-publication { padding: 8px; border: 1px solid #b7aa94; border-radius: 6px; }
 .dice-hero-picker { display: grid; gap: 6px; margin: 10px 0; }
 .dice-hero-picker select { width: 100%; padding: 8px; }
-@media (max-width: 600px) { .online-bar { gap: 8px; padding: 10px; } .online-bar strong { font-size: 20px; } #connection-status { flex-basis: calc(100% - 130px); } }
+
+.connection-settings { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 20px 0 28px; }
+.tabs .nav-icon { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; flex-shrink: 0; }
+.nav-icon svg { width: 24px; height: 24px; }
+.tabs .nav-icon:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
