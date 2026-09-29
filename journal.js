@@ -29,6 +29,18 @@
     };
   }
   dialog.append(head, body); if (clear) dialog.append(foot); document.body.append(dialog);
+
+  let outsidePress = false;
+  const outside = event => {
+    const r = dialog.getBoundingClientRect();
+    return event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom;
+  };
+  dialog.addEventListener('pointerdown', event => { outsidePress = event.target === dialog && outside(event); });
+  dialog.addEventListener('pointerup', event => {
+    if (outsidePress && event.target === dialog && outside(event)) dialog.close();
+    outsidePress = false;
+  });
+  dialog.addEventListener('pointercancel', () => { outsidePress = false; });
   close.onclick = () => dialog.close();
   document.getElementById('journal-open').onclick = () => { render(); dialog.showModal(); body.scrollTop = 0; };
   function persist() { try { sessionStorage.setItem(pendingKey, JSON.stringify(pending)); } catch (_) {} }

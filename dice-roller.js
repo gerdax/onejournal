@@ -3,7 +3,8 @@
 
   const config = { actor: 'hero', baseDice: 0, featMode: 'normal', exhausted: false,
     miserable: false, bonus: 0, hope: false, inspired: false, enemyResource: false, target: '' };
-  let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, collapseLevel = 0;
+  let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, headerOnly = false;
+  let pressStartedInSheet = false;
 
   function playerHero() {
     const store = root.OneRingStore;
@@ -57,12 +58,17 @@
     dialog.querySelector('.dice-close').addEventListener('click', close);
     dialog.querySelector('.dice-collapse').addEventListener('click', () => {
       if (pending) return;
-      collapseLevel = (collapseLevel + 1) % 3;
+      headerOnly = !headerOnly;
       renderCollapse();
     });
     dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+    dialog.addEventListener('pointerdown', event => {
+      pressStartedInSheet = !!event.target.closest('.dice-sheet');
+    });
     dialog.addEventListener('click', event => {
-      if (event.target === dialog || event.target.classList.contains('dice-dialog-layout')) close();
+      const outsideSheet = !event.target.closest('.dice-sheet');
+      if (outsideSheet && !pressStartedInSheet) close();
+      pressStartedInSheet = false;
     });
     setup.addEventListener('click', event => {
       const choice = event.target.closest('[data-choice] button');
@@ -133,20 +139,16 @@
 
   function renderCollapse() {
     const settings = setup.querySelector('#dice-settings');
-    settings.hidden = collapseLevel !== 0;
-    setup.hidden = dialog.dataset.view !== 'setup' || collapseLevel === 2;
-    resultPanel.hidden = dialog.dataset.view !== 'result' || collapseLevel === 2;
-    setup.classList.toggle('is-compact', collapseLevel === 1);
-    dialog.querySelector('.dice-sheet').classList.toggle('is-header-only', collapseLevel === 2);
+    settings.hidden = headerOnly;
+    setup.hidden = dialog.dataset.view !== 'setup' || headerOnly;
+    resultPanel.hidden = dialog.dataset.view !== 'result' || headerOnly;
+    dialog.querySelector('.dice-sheet').classList.toggle('is-header-only', headerOnly);
     const toggle = dialog.querySelector('.dice-collapse');
-    const groups = resultPanel.querySelector('.dice-result-groups');
-    if (groups) groups.hidden = collapseLevel !== 0;
-    resultPanel.classList.toggle('is-compact', collapseLevel === 1);
     toggle.setAttribute('aria-controls', dialog.dataset.view === 'result' ? 'dice-result-details' : 'dice-settings');
     toggle.disabled = !!pending;
-    toggle.setAttribute('aria-expanded', String(collapseLevel === 0));
+    toggle.setAttribute('aria-expanded', String(!headerOnly));
     const details = dialog.dataset.view === 'result' ? 'szczegóły wyniku' : 'ustawienia rzutu';
-    toggle.setAttribute('aria-label', `${collapseLevel === 2 ? 'Rozwiń' : 'Zwiń'} ${details}`);
+    toggle.setAttribute('aria-label', `${headerOnly ? 'Rozwiń' : 'Zwiń'} ${details}`);
   }
 
   function resizeStage() {
@@ -165,7 +167,8 @@
     mount();
     if (!dialog || dialog.open) return;
     opener = document.activeElement;
-    collapseLevel = 0;
+    headerOnly = false;
+    pressStartedInSheet = false;
     const hero = playerHero();
     if (hero) {
       config.exhausted = !!hero.weary;
@@ -187,6 +190,7 @@
     if (!dialog || !dialog.open) return;
     generation++;
     dialog.close();
+    pressStartedInSheet = false;
     if (root.DiceEngine && typeof root.DiceEngine.clear === 'function') root.DiceEngine.clear();
     if (opener && typeof opener.focus === 'function' && opener.isConnected) opener.focus();
   }
@@ -281,7 +285,7 @@
     if (!root.OneRingStore.canWrite) { showError('Brak połączenia — rzut jest zablokowany.'); return; }
     const targetInput = setup.querySelector('[data-target]');
     if (!targetInput.checkValidity()) {
-      collapseLevel = 0;
+      headerOnly = false;
       renderSetup();
       targetInput.reportValidity();
       return;

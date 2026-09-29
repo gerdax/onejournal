@@ -1,7 +1,33 @@
 (function () {
   "use strict";
-  const store = window.OneRingStore;
-  const host = document.getElementById("heroes"), battleList = document.getElementById("hero-battle-list");
+  const loadParts = ["weapon0Load", "weapon1Load", "weapon2Load", "weapon3Load", "armourLoad", "helmLoad", "shieldLoad", "treasure"];
+  function resourceNumber(value) {
+    if (value == null || String(value).trim() === "") return 0;
+    const number = Number(String(value).trim().replace(",", "."));
+    return Number.isFinite(number) ? number : NaN;
+  }
+  function getResourceWarnings(person) {
+    const endurance = resourceNumber(person.endurance), load = resourceNumber(person.load);
+    const fatigue = resourceNumber(person.fatigue), hope = resourceNumber(person.hope), shadow = resourceNumber(person.shadow);
+    const expectedLoad = loadParts.reduce((sum, field) => sum + resourceNumber(person[field]), 0);
+    return {
+      endurance: !person.weary && Number.isFinite(endurance) && Number.isFinite(load + fatigue) && endurance <= load + fatigue,
+      hope: !person.miserable && Number.isFinite(hope) && Number.isFinite(shadow) && hope <= shadow,
+      load: Number.isFinite(load) && Number.isFinite(expectedLoad) && Math.abs(load - expectedLoad) > 1e-9,
+      expectedLoad
+    };
+  }
+  function updateResourceWarnings(editor) {
+    const person = {};
+    for (const field of ["endurance", "load", "fatigue", "hope", "shadow", ...loadParts]) person[field] = editor.elements[field].value;
+    person.weary = editor.elements.weary.checked;
+    person.miserable = editor.elements.miserable.checked;
+    const warnings = getResourceWarnings(person);
+    for (const field of ["endurance", "hope", "load"]) editor.elements[field].classList.toggle("is-resource-warning", warnings[field]);
+  }
+  if (typeof module !== "undefined" && module.exports) module.exports = { getResourceWarnings, updateResourceWarnings };
+  const store = typeof window !== "undefined" && window.OneRingStore;
+  const host = typeof document !== "undefined" && document.getElementById("heroes"), battleList = typeof document !== "undefined" && document.getElementById("hero-battle-list");
   if (!host || !battleList || !store) return;
   const fields = ["name", "culture", "strength", "heart", "wits", "strengthTN", "heartTN", "witsTN", "endurance", "maxEndurance", "hope", "maxHope", "shadow", "load", "fatigue", "parry", "armour", "weapons", "proficiencies", "stance", "conditions", "notes"];
   const numeric = new Set(["strength", "heart", "wits", "strengthTN", "heartTN", "witsTN", "endurance", "maxEndurance", "hope", "maxHope", "shadow", "load", "fatigue", "parry", "armour"]);
@@ -98,16 +124,11 @@
     injury.disabled = !(dirty?.has("wounded") ? editor.elements.wounded.checked : hero?.wounded);
     if (injury.disabled) { injury.value = ""; if (dirty) dirty.delete("injury"); }
   }
-  function updateResourceWarnings(editor) {
-    for (const [field, threshold, condition] of [["endurance", "load", "weary"], ["hope", "shadow", "miserable"]]) {
-      const control = editor.elements[field];
-      control.classList.toggle("is-resource-warning", Number(control.value) <= Number(editor.elements[threshold].value) && !editor.elements[condition].checked);
-    }
-  }
   // Each cached sheet keeps its draft; disclosures reset when selection changes.
   // The same renderer serves both views; only saved fields go through the shared store.
   let embeddedSheetSequence = 0;
   window.OneRingHeroSheet = {
+    getResourceWarnings,
     mount(container) {
       const sheets = new Map();
       store.subscribe(() => { for (const sheet of sheets.values()) sheet.sync(); });

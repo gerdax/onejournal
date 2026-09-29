@@ -7,6 +7,18 @@
     if (store.access.role === 'gm') render();
   };
   document.getElementById('settings-close').onclick = () => dialog.close();
+
+  let outsidePress = false;
+  const outside = event => {
+    const r = dialog.getBoundingClientRect();
+    return event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom;
+  };
+  dialog.addEventListener('pointerdown', event => { outsidePress = event.target === dialog && outside(event); });
+  dialog.addEventListener('pointerup', event => {
+    if (outsidePress && event.target === dialog && outside(event)) dialog.close();
+    outsidePress = false;
+  });
+  dialog.addEventListener('pointercancel', () => { outsidePress = false; });
   if (store.access.role !== 'gm') return;
   const host = document.getElementById('access-links'), status = document.getElementById('settings-status');
   let generation = 0;

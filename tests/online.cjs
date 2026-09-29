@@ -115,8 +115,8 @@ async function main() {
     for (const field of ['endurance', 'hope']) {
       const value = one.page.locator(`#map-panel .map-resource[data-field="${field}"] strong > span.is-resource-warning`);
       assert.equal(await value.count(), 1);
-      assert.equal(await value.evaluate(node => getComputedStyle(node).color), 'rgb(161, 47, 40)');
-      assert.notEqual(await value.locator('..').evaluate(node => getComputedStyle(node).color), 'rgb(161, 47, 40)');
+      assert.equal(await value.evaluate(node => getComputedStyle(node).color), 'rgb(190, 90, 79)');
+      assert.notEqual(await value.locator('..').evaluate(node => getComputedStyle(node).color), 'rgb(190, 90, 79)');
     }
     await one.page.locator('#map-hero-sheet .sheet-character > summary').click();
     for (const field of ['endurance', 'hope']) assert.equal(await one.page.locator(`#map-hero-sheet input[name="${field}"].is-resource-warning`).count(), 1);

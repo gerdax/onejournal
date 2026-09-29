@@ -467,13 +467,14 @@
       stance.addEventListener('change', () => saveHeroField(person, stance, 'stance', stance.value));
       stanceLabel.appendChild(stance); panel.appendChild(stanceLabel);
     }
-    const resources = el('div', 'map-resources'); addAdjuster(resources, person.id, 'endurance', person.endurance, person.maxEndurance, 'Wytrzymałość', person.type === 'hero' && person.endurance <= person.load && !person.weary);
-    if (person.type === 'hero') addAdjuster(resources, person.id, 'hope', person.hope, person.maxHope, 'Nadzieja', person.hope <= person.shadow && !person.miserable);
+    const warnings = person.type === 'hero' ? root.OneRingHeroSheet.getResourceWarnings(person) : {};
+    const resources = el('div', 'map-resources'); addAdjuster(resources, person.id, 'endurance', person.endurance, person.maxEndurance, 'Wytrzymałość', !!warnings.endurance);
+    if (person.type === 'hero') addAdjuster(resources, person.id, 'hope', person.hope, person.maxHope, 'Nadzieja', !!warnings.hope);
     else addAdjuster(resources, person.id, 'hate', person.hate, person.maxHate, person.resourceType === 'determination' ? 'Determinacja' : 'Nienawiść');
     panel.appendChild(resources);
     const facts = el('div', 'map-panel-facts map-panel-hero-facts');
     const factValues = person.type === 'hero' ? [['Obrona', person.parry], ['Pancerz', person.armour], ['Obciąż.', person.load], ['Cień', person.shadow]] : [['Zajadł.', person.fierceness], ['Potęga', person.might], ['Obrona', person.parry], ['Pancerz', person.armour]];
-    for (const [label, value] of factValues) { const fact = el('div'); fact.append(el('span', '', label), el('strong', '', value ?? '—')); facts.appendChild(fact); }
+    for (const [label, value] of factValues) { const fact = el('div'); fact.append(el('span', '', label), el('strong', label === 'Obciąż.' && warnings.load ? 'is-resource-warning' : '', value ?? '—')); facts.appendChild(fact); }
     panel.appendChild(facts);
 
     if (person.type === 'hero') {
@@ -566,6 +567,18 @@
   doc.getElementById('map-fit').addEventListener('click', fit);
   const fullscreenButton = doc.getElementById('map-fullscreen');
   let expanded = false, savedOverflow = '', inactiveSiblings = [];
+  function placeDiceOverlay() {
+    const target = doc.fullscreenElement || (expanded ? viewport : doc.body);
+    for (const node of doc.querySelectorAll('.dice-launch, .dice-dialog')) {
+      if (node.parentElement !== target) {
+        const open = node.tagName === 'DIALOG' && node.open;
+        if (open) node.close();
+        target.appendChild(node);
+        if (open) node.showModal();
+      }
+    }
+  }
+  doc.addEventListener('fullscreenchange', placeDiceOverlay);
   function setExpanded(value) {
     if (expanded === value) return;
     restoreTokenDrag(); touchPoints.clear(); touchGesture = null; touchLocked = false;
@@ -575,6 +588,7 @@
     const label = value ? 'Przywróć zwykły widok mapy' : 'Rozwiń mapę na całe okno';
     fullscreenButton.setAttribute('aria-label', label); fullscreenButton.title = label;
     fullscreenButton.querySelector('path').setAttribute('d', value ? 'M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5' : 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5');
+    placeDiceOverlay();
     if (value) {
       savedOverflow = doc.body.style.overflow; doc.body.style.overflow = 'hidden';
       for (let node = viewport; node && node !== doc.body; node = node.parentElement) {
@@ -593,7 +607,7 @@
   }
   fullscreenButton.addEventListener('click', () => setExpanded(!expanded));
   doc.addEventListener('keydown', event => {
-    if (!expanded) return;
+    if (!expanded || doc.querySelector('.dice-dialog[open]')) return;
     if (event.key === 'Escape') { event.preventDefault(); setExpanded(false); }
     if (event.key === 'Tab') {
       const controls = [...viewport.querySelectorAll('button:not(:disabled)')].filter(node => node.getClientRects().length);
@@ -617,7 +631,7 @@
     offsetY += bounds.top + viewport.clientTop + viewport.clientHeight / 2 - (target.top + target.height / 2);
     transform();
   });
-  viewport.addEventListener('wheel', event => { if (!currentMap) return; event.preventDefault(); const box = viewport.getBoundingClientRect(); const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1); zoomAt(Math.exp(-clamp(pixels, -100, 100) * .0099), event.clientX - box.left, event.clientY - box.top); }, { passive: false });
+  viewport.addEventListener('wheel', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (!currentMap) return; event.preventDefault(); const box = viewport.getBoundingClientRect(); const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1); zoomAt(Math.exp(-clamp(pixels, -100, 100) * .0099), event.clientX - box.left, event.clientY - box.top); }, { passive: false });
   function restoreTokenDrag() {
     if (gesture && gesture.type === 'token') {
       gesture.node.style.left = gesture.x + 'px';
@@ -640,7 +654,7 @@
   }
   viewport.addEventListener('pointerdown', event => {
     if (event.button !== 0) return;
-    if (event.target.closest('.map-zoom-controls')) {
+    if (event.target.closest('.map-zoom-controls, .dice-launch, .dice-dialog')) {
       if (event.pointerType === 'touch' && !touchPoints.size) suppressTouchClick = false;
       return;
     }
@@ -702,7 +716,7 @@
   }
   function restoreTokenNode(done) { done.node.style.left = done.x + 'px'; done.node.style.top = done.y + 'px'; }
   viewport.addEventListener('pointerup', finishGesture); viewport.addEventListener('pointercancel', finishGesture); viewport.addEventListener('lostpointercapture', finishGesture);
-  viewport.addEventListener('click', event => { if (suppressTouchClick && event.pointerType === 'touch') { event.preventDefault(); event.stopPropagation(); } }, true);
+  viewport.addEventListener('click', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (suppressTouchClick && event.pointerType === 'touch') { event.preventDefault(); event.stopPropagation(); } }, true);
   tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker || isPlayer()) return; selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
   tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(marker.dataset.id); const pos = currentMap.positions[selected], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(selected, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
   if (root.ResizeObserver) new root.ResizeObserver(() => { if (currentMap && section.classList.contains('active') && viewport.clientWidth && viewport.clientHeight && !gesture && !touchPoints.size) fit(); }).observe(viewport);

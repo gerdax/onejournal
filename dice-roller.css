@@ -1,11 +1,11 @@
 .dice-launch {
   position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom));
-  z-index: 1000; display: grid; place-items: center; width: 60px; height: 60px; padding: 0; border: 1px solid #ac774b; border-radius: 50%;
+  z-index: 1001; display: grid; place-items: center; width: 60px; height: 60px; padding: 0; border: 1px solid #ac774b; border-radius: 50%;
   background: #3b3027; color: #fff8e9; box-shadow: 0 8px 24px #24170e55;
   font: 700 14px Manrope, sans-serif; cursor: pointer;
 }
 .dice-launch:focus-visible, .dice-dialog button:focus-visible, .dice-dialog input:focus-visible { outline: 3px solid #d0a15a; outline-offset: 3px; }
-body:has(.map-viewport.is-fullscreen) .dice-launch, body:has(:fullscreen) .dice-launch, body:has(.dice-dialog[open]) .dice-launch { display: none; }
+body:has(.dice-dialog[open]) .dice-launch { display: none; }
 .dice-dialog { --dice-sheet-max: calc(100dvh - 24px); position: fixed; inset: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: #3e3025; overflow: hidden; }
 .dice-dialog::backdrop { background: rgb(30 27 24 / 22%); }
 .dice-dialog-layout { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
@@ -23,7 +23,6 @@ body:has(.map-viewport.is-fullscreen) .dice-launch, body:has(:fullscreen) .dice-
 .dice-collapse svg { position: relative; top: 5px; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; }
 .dice-collapse[aria-expanded="false"] svg { transform: rotate(180deg); }
 .dice-collapse:disabled { opacity: .45; cursor: wait; }
-.dice-setup.is-compact .dice-pool { display: none; }
 .dice-field { padding: 0; margin: 0; border: 0; min-width: 0; }
 .dice-field legend, .dice-bonus > span, .dice-target { margin-bottom: 6px; font: 700 12px Manrope, sans-serif; color: #594234; }
 .dice-options { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -67,7 +66,6 @@ body:has(.map-viewport.is-fullscreen) .dice-launch, body:has(:fullscreen) .dice-
 .dice-dialog[data-actor="enemy"] .dice-result-die { background: #282828; color: #f9f1df; border-color: #555; }
 .dice-result-die.is-unused { filter: grayscale(1); opacity: .4; }
 .dice-result-die.is-success { outline: 3px solid #b46a33; outline-offset: 2px; }
-.dice-result.is-compact .dice-result-summary { border-top: 0; padding-top: 0; }
 .dice-result-summary { padding: 10px 0; border-top: 1px solid #d7c5ad; }
 .dice-result-summary p { margin: 3px 0; font: 600 13px Manrope, sans-serif; }
 .dice-result-summary .dice-total { font: 700 23px Fraunces, Georgia, serif; }

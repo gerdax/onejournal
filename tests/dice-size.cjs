@@ -2,7 +2,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');
+const { startFixture } = require('./fixture-server.cjs');
 (async () => {
+  const fixture = await startFixture();
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
   try {
     // Observe configuration without replacing the real rendering or physics.
@@ -17,12 +19,13 @@ const { chromium } = require('playwright');
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/dice-engine.js?*', route => route.fulfill({ contentType: 'text/javascript', body: adapter }));
-      await page.goto(process.env.BASE_URL || 'http://localhost:8765');
+      await page.goto(fixture.url + '/#access=' + fixture.secrets.gm);
+      await page.waitForFunction(() => window.OneRingStore?.connection === 'online');
       await page.locator('.dice-launch').click();
       await page.locator('[data-choice="baseDice"] [data-value="3"]').click();
-      if (compact) await page.locator('.dice-collapse').click();
       await page.locator('.dice-roll').click();
       await page.locator('.dice-result:not([hidden])').waitFor({ timeout: 30000 });
+      if (compact) await page.locator('.dice-collapse').click();
       const measurement = await page.evaluate(() => {
         const c = document.querySelector('#dice-stage canvas');
         return { projectionScale: testDiceScale * c.clientHeight, bufferWidth: c.width, cssWidth: c.clientWidth };
@@ -33,9 +36,8 @@ const { chromium } = require('playwright');
       await page.screenshot({ path: `/tmp/dice-size-${width}-${height}.png` });
       console.log({ width, height, dpr, compact, ...measurement });
       if (width === 390) {
+        await page.locator('.dice-collapse').click();
         await page.locator('.dice-again').click();
-        await page.locator('.dice-collapse').click();
-        await page.locator('.dice-collapse').click();
         await page.locator('[data-choice="baseDice"] [data-value="6"]').click();
         await page.locator('[data-choice="featMode"] [data-value="favoured"]').click();
         await page.locator('[data-check="hope"]').check();
@@ -48,6 +50,6 @@ const { chromium } = require('playwright');
       }
       await context.close();
     }
-    console.log('Constant on-screen scale, compact/expanded setup, Retina and full mobile pool passed.');
-  } finally { await browser.close(); }
+    console.log('Constant on-screen scale, header-only/full result, Retina and full mobile pool passed.');
+  } finally { await browser.close(); await fixture.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

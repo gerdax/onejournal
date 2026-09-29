@@ -142,7 +142,7 @@ const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8765';
     await mobile.keyboard.press('Escape');
     await mobile.locator('[data-tab="map"]').click();
     await mobile.locator('.map-viewport').evaluate(n => n.classList.add('is-fullscreen'));
-    assert.equal(await mobile.locator('.dice-launch').isVisible(), false);
+    assert.equal(await mobile.locator('.dice-launch').isVisible(), true);
     await phone.close();
     console.log('Dice roller: real hero/enemy/zero-dice rolls, offline, lifecycle, errors, mobile and storage isolation passed.');
   } finally { await browser.close(); }

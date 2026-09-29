@@ -24,8 +24,6 @@ const { startFixture } = require('./fixture-server.cjs');
     await player.locator('[data-check="exhausted"]').uncheck();
     await toggle.click();
     assert.equal(await player.locator('#dice-settings').isVisible(), false);
-    assert.equal(await player.locator('.dice-roll').isVisible(), true);
-    await toggle.click();
     assert.equal(await player.locator('.dice-setup').isVisible(), false);
     assert.equal(await player.locator('.dice-roll').isVisible(), false);
     assert.equal(await toggle.isVisible(), true);
@@ -39,8 +37,6 @@ const { startFixture } = require('./fixture-server.cjs');
     assert.equal(await player.locator('#dice-heading').textContent(), 'Wynik');
     await toggle.click();
     assert.equal(await player.locator('.dice-result-groups').isVisible(), false);
-    assert.equal(await player.locator('.dice-again').isVisible(), true);
-    await toggle.click();
     assert.equal(await player.locator('.dice-result').isVisible(), false);
     assert.equal(await player.locator('.dice-again').isVisible(), false);
     await player.screenshot({ path: '/tmp/onejournal-dice-header-result.png' });
@@ -56,6 +52,27 @@ const { startFixture } = require('./fixture-server.cjs');
     await player.waitForFunction(() => window.OneRingStore.getState().heroes[0].hope === 7);
     assert.equal(fixture.document.state.heroes[0].hope, 7);
     await player.locator('.dice-again').click();
+    await player.locator('[data-check="hope"]').check();
+    const rollsBeforeDismissedThrow = await player.evaluate(() => window.OneRingStore.rolls.length);
+    await player.evaluate(() => {
+      window.diceRollCalls = 0;
+      window.DiceEngine = {
+        clear() {},
+        roll: () => {
+          window.diceRollCalls++;
+          return new Promise(resolve => { window.finishDismissedThrow = resolve; });
+        }
+      };
+    });
+    await player.locator('.dice-roll').click();
+    await player.locator('.dice-close').click();
+    await player.locator('.dice-launch').click();
+    assert.equal(await player.locator('.dice-roll').isDisabled(), true);
+    await player.evaluate(() => finishDismissedThrow({ feat: [7], success: [4] }));
+    await player.waitForFunction(count => window.OneRingStore.rolls.length === count + 1 && window.OneRingStore.getState().heroes[0].hope === 6, rollsBeforeDismissedThrow);
+    assert.equal(await player.evaluate(() => window.diceRollCalls), 1);
+    assert.equal(await player.locator('.dice-result').isVisible(), false);
+    await player.waitForFunction(() => !document.querySelector('.dice-roll').disabled);
     await player.locator('[data-check="hope"]').check();
     await player.evaluate(() => {
       const store = window.OneRingStore;
@@ -89,7 +106,7 @@ const { startFixture } = require('./fixture-server.cjs');
     assert.equal(await gm.locator('#dice-heading').textContent(), 'Rzut');
     assert.equal(await gm.locator('[data-check="hope"]').isDisabled(), false);
     await gm.close();
-    console.log('PASS: three dice dialog states, player defaults, Hope gate, GM setup heading');
+    console.log('PASS: two dice dialog states, player defaults, Hope gate, GM setup heading');
   } finally {
     await browser.close();
     await fixture.close();
