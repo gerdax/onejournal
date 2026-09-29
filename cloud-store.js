@@ -77,6 +77,7 @@
       listLinks() { return enqueue({ action: 'links' }); },
       rotateLink(heroId) { return enqueue({ action: 'rotateLink', heroId }); },
       revokeLink(heroId) { return enqueue({ action: 'revokeLink', heroId }); },
+      clearRolls() { return enqueue({ action: 'clearRolls' }, true); },
       publishRoll(entry) { return enqueue({ action: 'roll', ...clone(entry) }, true); }
     };
     mutations.forEach(method => {

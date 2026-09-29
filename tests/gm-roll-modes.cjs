@@ -102,8 +102,26 @@ async function main() {
     assert.equal(await b.page.evaluate(() => window.OneRingStore.rolls.length), 2);
     console.log('PASS: player roll is forced to assigned hero name and public');
 
+    await refresh(gm.page);
+    await gm.page.locator('#journal-open').click();
+    for (const { page } of [a, b]) {
+      await page.locator('#journal-open').click();
+      assert.equal(await page.getByRole('button', { name: 'Wyczyść dziennik rzutów' }).count(), 0);
+    }
+    await gm.page.getByRole('button', { name: 'Wyczyść dziennik rzutów' }).click();
+    await gm.page.waitForFunction(() => window.OneRingStore.rolls.length === 0);
+    for (const { page } of [a, b]) {
+      await refresh(page);
+      assert.equal(await page.locator('.journal-entry').count(), 0);
+      assert.equal(await page.evaluate(() => window.OneRingStore.rolls.length), 0);
+      await page.getByRole('button', { name: 'Zamknij dziennik rzutów' }).click();
+    }
+    assert.equal(fixture.document.rolls.length, 0);
+    await gm.page.getByRole('button', { name: 'Zamknij dziennik rzutów' }).click();
+    console.log('PASS: GM clears all rolls, both players see empty journals and no clear action');
+
     for (const hero of fixture.heroes) await gm.page.evaluate(id => window.OneRingStore.deleteHero(id), hero.id);
-    await roll(gm.page, 'hero', 5);
+    await roll(gm.page, 'hero', 1);
     entry = fixture.document.rolls.at(-1).entry;
     assert.equal(entry.actor, 'hero');
     assert.equal(entry.heroId, null);

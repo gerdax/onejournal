@@ -208,6 +208,9 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
             output = { heroId, secret, active: true };
           }
           publicChange = false;
+        } else if (request.action === "clearRolls") {
+          if (access.role !== "gm") fail(403, "Brak uprawnień.");
+          doc.rolls = [];
         } else if (request.action === "roll") {
           if (typeof request.id !== "string" || !/^[\w-]{8,80}$/.test(request.id)) fail(400, "Nieprawidłowe ID rzutu.");
           const config = cleanConfig(request.config);

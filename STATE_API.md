@@ -131,3 +131,8 @@ features remain unchanged; backups still use version 2. New generation affects
 only explicitly regenerated maps, never existing terrain or token positions.
 
 Enemy records include plain-text `notes` (empty by default for legacy entries). Notes are copied with library templates into encounters and clones, preserved in backups, and included when detecting duplicate library imports. Map notes are read-only snapshots of the added enemy, like its other template fields.
+
+Cloud store: `clearRolls()` atomically deletes all published public and private rolls.
+Only GM may call it (server-enforced); the returned snapshot updates the caller,
+and a public revision change synchronizes all players. Character and map data stay unchanged.
+Unpublished local rolls are not records in the shared journal.

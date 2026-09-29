@@ -255,3 +255,28 @@ test('restoring a backup without a hero revokes its active player grant', async 
   await assert.rejects(f.core.handle('p1', { action: 'snapshot' }), { status: 403 });
   await assert.rejects(f.core.handle('p2', { action: 'exchange', secret: link.secret }), { status: 403 });
 });
+
+test('only GM clears all public and private rolls and notifies players without changing game data', async () => {
+  const f = fixture();
+  const id = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A' }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId: id });
+  await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const config = { actor: 'hero', baseDice: 0, bonus: 0, featMode: 'normal', hope: false, inspired: false, enemyResource: false, miserable: false, exhausted: false };
+  for (const [index, actor] of ['hero', 'npc', 'enemy'].entries()) {
+    await f.core.handle('gm', { action: 'roll', id: `clear-test-${index}`, config: { ...config, actor }, raw: { feat: [5], success: [] } });
+  }
+  await f.core.handle('p1', { action: 'roll', id: 'clear-player-roll', heroId: id, config, raw: { feat: [7], success: [] } });
+  const before = structuredClone(f.doc);
+  await assert.rejects(f.core.handle('p1', { action: 'clearRolls' }), { status: 403 });
+  assert.deepEqual(f.doc, before);
+  const cleared = await f.core.handle('gm', { action: 'clearRolls' });
+  assert.deepEqual(cleared.rolls, []);
+  assert.deepEqual(f.doc.state, before.state);
+  assert.deepEqual(f.doc.links, before.links);
+  assert.equal(f.doc.publicRevision, before.publicRevision + 1);
+  assert.deepEqual((await f.core.handle('p1', { action: 'snapshot' })).rolls, []);
+  assert.deepEqual((await f.core.handle('gm', { action: 'export' })).rolls, []);
+  await f.core.handle('gm', { action: 'clearRolls' });
+  await f.core.handle('p1', { action: 'roll', id: 'after-clear-roll', heroId: id, config, raw: { feat: [3], success: [] } });
+  assert.equal(f.doc.rolls.length, 1);
+});

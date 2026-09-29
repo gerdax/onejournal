@@ -13,6 +13,20 @@
   head.append(el('h2', 'Dziennik rzutów'), close);
   const list = el('div'), notice = el('p'); notice.setAttribute('role', 'status');
   const body = el('div', null, 'journal-body'); body.append(notice, list);
+  let clearing = false;
+  const clear = store.access.role === 'gm' ? el('button', 'Wyczyść dziennik rzutów', 'text-button') : null;
+  if (clear) {
+    clear.type = 'button'; body.prepend(clear);
+    clear.onclick = async () => {
+      if (clearing || !store.canWrite) return;
+      clearing = true; render();
+      try {
+        await store.clearRolls();
+        notice.textContent = 'Dziennik rzutów został wyczyszczony u wszystkich.';
+      } catch (error) { notice.textContent = 'Nie wyczyszczono dziennika. ' + error.message; }
+      finally { clearing = false; render(); }
+    };
+  }
   dialog.append(head, body); document.body.append(dialog);
   close.onclick = () => dialog.close();
   document.getElementById('journal-open').onclick = () => { render(); dialog.showModal(); body.scrollTop = 0; };
@@ -51,6 +65,7 @@
     return node;
   }
   function render() {
+    if (clear) clear.disabled = clearing || !store.canWrite || !store.rolls.length;
     if (!store.access.role) { list.replaceChildren(); pending = []; sessionStorage.removeItem(pendingKey); return; }
     list.replaceChildren();
     for (const entry of pending) {
