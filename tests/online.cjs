@@ -58,6 +58,56 @@ async function main() {
     }
     console.log('PASS: separate GM/player snapshots and private enemy data');
 
+    // Repeated cloud snapshots must leave a focused text field and the closed dice form alone.
+    await one.page.evaluate(() => {
+      const editor = document.querySelector('#hero-editor');
+      const name = editor.elements.name;
+      const counts = {};
+      const restore = [];
+      const watch = (node, property, key) => {
+        let proto = Object.getPrototypeOf(node);
+        while (proto && !Object.getOwnPropertyDescriptor(proto, property)) proto = Object.getPrototypeOf(proto);
+        const descriptor = Object.getOwnPropertyDescriptor(proto, property);
+        Object.defineProperty(node, property, {
+          configurable: true,
+          get() { return descriptor.get.call(this); },
+          set(value) { counts[key] = (counts[key] || 0) + 1; descriptor.set.call(this, value); }
+        });
+        restore.push(() => { delete node[property]; });
+      };
+      for (const control of editor.elements) {
+        if (!control.name) continue;
+        watch(control, control.type === 'checkbox' ? 'checked' : 'value', control.name);
+      }
+      watch(editor.elements.shadow, 'min', 'shadow.min');
+      watch(editor.elements.injury, 'disabled', 'injury.disabled');
+      const target = document.querySelector('.dice-setup [data-target]');
+      watch(target, 'value', 'dice.target');
+      name.focus();
+      name.setSelectionRange(2, 2);
+      window.heroRefreshProbe = { name, counts, restore };
+    });
+    await refresh(one.page);
+    await refresh(one.page);
+    assert.deepEqual(await one.page.evaluate(() => {
+      const { name, counts } = window.heroRefreshProbe;
+      return { sameNode: name === document.querySelector('#hero-editor input[name="name"]'), focused: document.activeElement === name,
+        caret: name.selectionStart, counts };
+    }), { sameNode: true, focused: true, caret: 2, counts: {} });
+    await gm.page.evaluate(id => OneRingStore.saveHero({ id, culture: 'Shire polled' }, 0), heroOne.id);
+    await refresh(one.page);
+    assert.equal(await one.page.locator('#hero-editor input[name="culture"]').inputValue(), 'Shire polled');
+    assert.deepEqual(await one.page.evaluate(() => {
+      const { name, counts } = window.heroRefreshProbe;
+      return { sameNode: name === document.querySelector('#hero-editor input[name="name"]'), focused: document.activeElement === name,
+        caret: name.selectionStart, counts };
+    }), { sameNode: true, focused: true, caret: 2, counts: { culture: 1 } });
+    await one.page.evaluate(() => {
+      window.heroRefreshProbe.restore.forEach(restore => restore());
+      delete window.heroRefreshProbe;
+    });
+    console.log('PASS: unchanged hero refresh preserves focused text and avoids control writes; remote field syncs');
+
     await gm.page.locator('[data-tab="map"]').click();
     const enemy = gm.page.locator('.enemy-token').first();
     const enemyId = await enemy.getAttribute('data-id');

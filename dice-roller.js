@@ -334,7 +334,7 @@
   }
 
   root.DiceRoller = { open, close };
-  root.OneRingStore.subscribe(() => { if (dialog && dialog.isConnected) renderSetup(); });
+  root.OneRingStore.subscribe(() => { if (dialog?.open) renderSetup(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
   else mount();
 })(globalThis);

@@ -114,8 +114,9 @@
       content.before(section);
       section.append(content);
     });
-    fields.forEach(name => { const control = form.elements[name]; if (!control) return; if (booleans.has(name)) control.checked = !!value(name); else control.value = displayValue(control, value(name)); });
-    form.elements.shadow.min = String(hero ? hero.shadowScars : 0);
+    fields.forEach(name => { const control = form.elements[name]; if (!control) return; if (booleans.has(name)) { const next = !!value(name); if (control.checked !== next) control.checked = next; } else { const next = displayValue(control, value(name)); if (control.value !== next) control.value = next; } });
+    const shadowMin = String(hero ? hero.shadowScars : 0);
+    if (form.elements.shadow.min !== shadowMin) form.elements.shadow.min = shadowMin;
     syncInjury(form, hero);
     updateResourceWarnings(form);
     form.elements.name.required = true;
@@ -125,8 +126,9 @@
   }
   function syncInjury(editor, hero, dirty) {
     const injury = editor.elements.injury;
-    injury.disabled = !(dirty?.has("wounded") ? editor.elements.wounded.checked : hero?.wounded);
-    if (injury.disabled) { injury.value = ""; if (dirty) dirty.delete("injury"); }
+    const disabled = !(dirty?.has("wounded") ? editor.elements.wounded.checked : hero?.wounded);
+    if (injury.disabled !== disabled) injury.disabled = disabled;
+    if (disabled) { if (injury.value !== "") injury.value = ""; if (dirty) dirty.delete("injury"); }
   }
   // Each cached sheet keeps its draft; disclosures reset when selection changes.
   // The same renderer serves both views; only saved fields go through the shared store.
@@ -177,11 +179,12 @@
               const current = heroById(id);
               if (!current) return;
               syncInjury(editor, current, dirty);
-              editor.elements.shadow.min = String(current.shadowScars);
+              const shadowMin = String(current.shadowScars);
+              if (editor.elements.shadow.min !== shadowMin) editor.elements.shadow.min = shadowMin;
               fields.forEach(name => {
                 const control = editor.elements[name];
                 if (!control || dirty.has(name) || (name === "injury" && !current.wounded)) return;
-                if (booleans.has(name)) control.checked = !!current[name];
+                if (booleans.has(name)) { const next = !!current[name]; if (control.checked !== next) control.checked = next; }
                 else {
                   const value = displayValue(control, current[name]);
                   if (control.value !== value) control.value = value;
@@ -240,8 +243,9 @@
     if (!hero) { editingId = null; draftDirty = false; dirtyFields.clear(); return; }
     syncInjury(form, hero, dirtyFields);
     draftDirty = dirtyFields.size > 0;
-    form.elements.shadow.min = String(hero.shadowScars);
-    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && form.elements.injury.disabled)) return; if (booleans.has(name)) { control.checked = !!hero[name]; return; } const next = displayValue(control, hero[name]); if (control.value !== next) control.value = next; });
+    const shadowMin = String(hero.shadowScars);
+    if (form.elements.shadow.min !== shadowMin) form.elements.shadow.min = shadowMin;
+    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && form.elements.injury.disabled)) return; if (booleans.has(name)) { const next = !!hero[name]; if (control.checked !== next) control.checked = next; return; } const next = displayValue(control, hero[name]); if (control.value !== next) control.value = next; });
     updateResourceWarnings(form);
   }
   function renderList() {
