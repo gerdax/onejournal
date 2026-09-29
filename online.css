@@ -62,4 +62,4 @@ body[data-role="player"] #map > .map-heading { display: none; }
 .tabs.nav-hide-count #map-count { display: none; }
 .tabs.nav-short-label .nav-label-long { display: none; }
 .tabs.nav-short-label .nav-label-short { display: inline; }
-.tabs.nav-short-label > .tab { padding-inline: 4px; }
+.tabs.nav-short-label > .tab { padding-inline: 2px; }
