@@ -42,6 +42,7 @@
 .sheet-current { margin: 8px auto 16px; width: 86px; }
 .sheet-current label { font-size: 0; gap: 0; }
 .sheet-current input { font-size: 38px !important; border: 0; border-bottom: 1px solid #d8cabc; background: #f7ede1; height: 64px; }
+.hero-editor .sheet-current input.is-resource-warning { color: #a12f28; }
 .sheet-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
 .sheet-conditions { margin-top: 18px; border-top: 1px solid #be8171; padding-top: 12px; }
 .sheet-conditions h3 { text-align: center; font-size: 17px; margin-bottom: 12px; }

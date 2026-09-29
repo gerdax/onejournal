@@ -17,7 +17,7 @@
   fields.push(...booleans);
   for (let i = 0; i < 4; i++) ["Name", "Damage", "Injury", "Load", "Notes"].forEach(key => fields.push(`weapon${i}${key}`));
   let editingId = null, draftDirty = false, draftVersion = null;
-  const dirtyFields = new Set();
+  const dirtyFields = new Set(), conflictFields = new Set();
   const listCards = new Map();
   // View preferences belong to the editor, not to individual hero records.
   const sectionOpen = { character: true, attributes: true, gear: true, equipment: true };
@@ -26,6 +26,7 @@
   const isPlayer = () => store.access?.role === "player";
   const canSave = () => store.connection === "online" && store.canWrite;
   const saveError = error => error?.message || "Nie udało się zapisać zmiany.";
+  const conflictStatus = "Konflikt zapisu. Zmiany zachowano; edytuj pole, aby zapisać swoją wersję.";
 
   host.innerHTML = `<div class="section-heading hero-heading"><div><h2>Drużyna</h2></div><button type="button" class="text-button" data-hero-action="new">+ Nowy bohater</button></div><div class="heroes-layout"><div id="hero-list" class="hero-list" role="tablist" aria-label="Arkusze bohaterów"></div><div id="hero-empty-panel" class="hero-empty" hidden>Nie ma jeszcze bohaterów. Użyj „Nowy bohater”, aby utworzyć pierwszy arkusz.</div><form id="hero-editor" class="paper form-card hero-editor" role="tabpanel" aria-label="Arkusz bohatera" novalidate></form></div>`;
   const list = host.querySelector("#hero-list"), form = host.querySelector("#hero-editor");
@@ -59,7 +60,7 @@
       <section class="sheet-gear"><h3>Rynsztunek</h3><div class="sheet-gear-grid"><div class="sheet-weapons">${Array.from({length: 4}, (_, i) => `<div class="sheet-weapon-row">${[["Broń", "Name"], ["Obrażenia", "Damage"], ["Przebicie", "Injury"], ["Obciążenie", "Load"], ["Uwagi", "Notes"]].map(([label, key]) => textField(label, `weapon${i}${key}`)).join("")}</div>`).join("")}</div><div class="sheet-armour">${[["Zbroja", "armourName", "Pancerz (k)", "armour", "armourLoad"], ["Hełm", "helmName", "Pancerz (k)", "helmProtection", "helmLoad"], ["Tarcza", "shieldName", "Obrona", "shieldParry", "shieldLoad"]].map(([label, name, protection, key, load]) => `<div>${textField(label, name)}${numberField(protection, key)}${numberField("Obciążenie", load)}</div>`).join("")}</div></div></section>
       <div class="sheet-bottom"><section><h3>Ekwipunek</h3>${area("Przedmioty i wyposażenie", "equipment", 5)}</section><section class="sheet-progress">${textField("Poziom życia", "standardOfLiving")}<div class="sheet-points">${numberField("Punkty przygody", "adventurePoints")}${numberField("Punkty umiejętności", "skillPoints")}${numberField("Poziom zażyłości", "fellowship")}</div></section></div>
       <details class="sheet-extra sheet-disclosure"><summary>Notatki</summary><div>${area("Notatki bohatera", "notes")}</div></details>
-      <div class="form-actions hero-editor-footer"><div class="hero-editor-footer-actions"></div><button type="button" class="text-button hero-retry" hidden>Ponów zapis</button><span class="hero-save-status" role="status" aria-live="polite">Zapisano</span></div>`;
+      <div class="form-actions hero-editor-footer"><div class="hero-editor-footer-actions"></div><span class="hero-save-status" role="status" aria-live="polite">Zapisano</span></div>`;
     [
       ["character", ".sheet-top", "Postać"],
       ["attributes", ".sheet-columns", "Cechy i umiejętności"],
@@ -86,15 +87,22 @@
     fields.forEach(name => { const control = form.elements[name]; if (!control) return; if (booleans.has(name)) control.checked = !!value(name); else control.value = value(name); });
     form.elements.shadow.min = String(hero ? hero.shadowScars : 0);
     syncInjury(form, hero);
+    updateResourceWarnings(form);
     form.elements.name.required = true;
     form.elements.name.maxLength = 80;
     if (hero && !embedded && !isPlayer()) { const actions = form.querySelector(".hero-editor-actions"), footer = form.querySelector(".hero-editor-footer-actions"), inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); const battle = el("button", "text-button", inBattle ? "Usuń z potyczki" : "Dodaj do potyczki"); battle.type = "button"; battle.dataset.heroAction = "battle"; battle.dataset.id = hero.id;  actions.append(battle); const remove = el("button", "text-button danger", "Usuń bohatera"); remove.type = "button"; remove.dataset.heroAction = "delete"; remove.dataset.id = hero.id; footer.append(remove); }
-    if (!embedded) { draftDirty = false; draftVersion = null; dirtyFields.clear(); }
+    if (!embedded) { draftDirty = false; draftVersion = null; dirtyFields.clear(); conflictFields.clear(); }
   }
   function syncInjury(editor, hero, dirty) {
     const injury = editor.elements.injury;
-    injury.disabled = !hero?.wounded;
+    injury.disabled = !(dirty?.has("wounded") ? editor.elements.wounded.checked : hero?.wounded);
     if (injury.disabled) { injury.value = ""; if (dirty) dirty.delete("injury"); }
+  }
+  function updateResourceWarnings(editor) {
+    for (const [field, threshold, condition] of [["endurance", "load", "weary"], ["hope", "shadow", "miserable"]]) {
+      const control = editor.elements[field];
+      control.classList.toggle("is-resource-warning", Number(control.value) <= Number(editor.elements[threshold].value) && !editor.elements[condition].checked);
+    }
   }
   // Each cached sheet keeps its draft; disclosures reset when selection changes.
   // The same renderer serves both views; only saved fields go through the shared store.
@@ -102,6 +110,7 @@
   window.OneRingHeroSheet = {
     mount(container) {
       const sheets = new Map();
+      store.subscribe(() => { for (const sheet of sheets.values()) sheet.sync(); });
       return {
         show(id) {
           for (const [key] of sheets) if (!heroById(key)) sheets.delete(key);
@@ -114,25 +123,30 @@
             editor.id = "map-hero-editor-" + (++embeddedSheetSequence);
             editor.noValidate = true;
             editor.setAttribute("aria-label", "Arkusz wybranego bohatera");
-            const dirty = new Set();
-            let baseVersion = null, saving = false;
+            const dirty = new Set(), conflicts = new Set();
+            let baseVersion = null, saving = false, timer = null;
             const status = text => { editor.querySelector(".hero-save-status").textContent = text; };
-            const save = async name => {
-              if (saving || !dirty.has(name)) return;
-              if (!canSave()) { status("Brak połączenia. Zmiany czekają na zapis."); editor.querySelector(".hero-retry").hidden = false; return; }
+            const schedule = (delay = 500) => { clearTimeout(timer); timer = setTimeout(save, delay); };
+            const save = async () => {
+              if (saving || !dirty.size) return;
+              if (!canSave()) { status("Brak połączenia. Zmiany czekają na zapis."); return; }
+              const name = [...dirty].find(field => !conflicts.has(field));
+              if (!name) { status(conflictStatus); return; }
               if (!validForm([name], editor)) { status("Popraw zaznaczone pole."); return; }
               const control = editor.elements[name];
               const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim();
               const sent = booleans.has(name) ? control.checked : control.value;
-              saving = true; status("Zapisywanie…");
+              saving = true; let succeeded = false; status("Zapisywanie…");
               try {
                 await store.saveHero({id, [name]:value}, baseVersion);
+                succeeded = true;
                 if ((booleans.has(name) ? control.checked : control.value) === sent) dirty.delete(name);
                 baseVersion = dirty.size ? store.heroVersions?.[id] ?? null : null;
-                sync(); status(dirty.size ? "Niezapisane zmiany" : "Zapisano");
-                editor.querySelector(".hero-retry").hidden = !dirty.size;
-              } catch (error) { status(saveError(error) + " Ponów zapis po sprawdzeniu zmian."); editor.querySelector(".hero-retry").hidden = false; }
-              finally { saving = false; }
+                sync(); status(conflicts.size ? conflictStatus : dirty.size ? "Niezapisane zmiany" : "Zapisano");
+              } catch (error) {
+                if (error?.status === 409) { for (const field of dirty) conflicts.add(field); status(conflictStatus); }
+                else status("Zapis nie powiódł się. Zmiany czekają na połączenie.");
+              } finally { saving = false; if (succeeded && dirty.size && canSave() && [...dirty].some(field => !conflicts.has(field))) schedule(500); }
             };
             const sync = () => {
               const current = heroById(id);
@@ -148,18 +162,24 @@
                   if (control.value !== value) control.value = value;
                 }
               });
+              updateResourceWarnings(editor);
+              if (dirty.size && !saving && canSave() && [...dirty].some(field => !conflicts.has(field))) schedule(200);
             };
             drawEditor(hero, editor, {character:false, attributes:false, gear:false, equipment:false}, true);
-            editor.addEventListener("input", event => {
-              if (fields.includes(event.target.name)) { if (!dirty.size) baseVersion = store.heroVersions?.[id] ?? null; dirty.add(event.target.name); status("Niezapisane zmiany"); }
-            });
-            editor.addEventListener("change", event => {
+            const changed = event => {
               const name = event.target.name;
-              if (!fields.includes(name)) return;
-              if (!dirty.size) baseVersion = store.heroVersions?.[id] ?? null;
-              dirty.add(name); save(name);
+              if (!fields.includes(name) || event.isComposing) return;
+              if (!dirty.size || conflicts.size) baseVersion = store.heroVersions?.[id] ?? null;
+              conflicts.delete(name); dirty.add(name);
+              syncInjury(editor, heroById(id), dirty); updateResourceWarnings(editor);
+              status("Niezapisane zmiany"); schedule();
+            };
+            editor.addEventListener("input", changed);
+            editor.addEventListener("change", event => {
+              if (fields.includes(event.target.name) && !dirty.has(event.target.name)) changed(event);
+              if (!conflicts.has(event.target.name)) schedule(0);
             });
-            editor.querySelector(".hero-retry").addEventListener("click", async () => { baseVersion = store.heroVersions?.[id] ?? null; for (const name of [...dirty]) await save(name); });
+            editor.addEventListener("compositionend", changed);
             editor.addEventListener("submit", event => { event.preventDefault(); if (editor.contains(document.activeElement)) document.activeElement.blur(); });
             sheet = {editor, sync};
             sheets.set(id, sheet);
@@ -195,7 +215,8 @@
     syncInjury(form, hero, dirtyFields);
     draftDirty = dirtyFields.size > 0;
     form.elements.shadow.min = String(hero.shadowScars);
-    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && !hero.wounded)) return; if (booleans.has(name)) { control.checked = !!hero[name]; return; } const next = hero[name] == null ? (numeric.has(name) ? "0" : "") : String(hero[name]); if (control.value !== next) control.value = next; });
+    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && form.elements.injury.disabled)) return; if (booleans.has(name)) { control.checked = !!hero[name]; return; } const next = hero[name] == null ? (numeric.has(name) ? "0" : "") : String(hero[name]); if (control.value !== next) control.value = next; });
+    updateResourceWarnings(form);
   }
   function renderList() {
     const state = store.getState(), ids = new Set(state.heroes.map(hero => hero.id));
@@ -235,21 +256,55 @@
       if (!isPlayer()) { const defeated = el("button", "defeated", hero.defeated ? "Przywróć do walki" : "Oznacz jako pokonanego"); defeated.type = "button"; defeated.dataset.heroAction = "defeated"; defeated.dataset.id = hero.id; card.append(defeated); } battleList.append(card);
     });
   }
-  function render() { const layout = host.querySelector(".heroes-layout"), priorError = host.querySelector(".hero-error"); if (store.loadError) { layout.hidden = true; if (!priorError) host.querySelector(".hero-heading").append(el("p", "hero-error", "Nie można odczytać zapisanych danych bohaterów. Przywróć poprawną pełną kopię.")); return; } layout.hidden = false; if (priorError) priorError.remove(); syncEditor(); renderList(); syncHeader(); renderBattle(); }
+  function render() { const layout = host.querySelector(".heroes-layout"), priorError = host.querySelector(".hero-error"); if (store.loadError) { layout.hidden = true; if (!priorError) host.querySelector(".hero-heading").append(el("p", "hero-error", "Nie można odczytać zapisanych danych bohaterów. Przywróć poprawną pełną kopię.")); return; } layout.hidden = false; if (priorError) priorError.remove(); syncEditor(); renderList(); syncHeader(); renderBattle(); if (draftDirty && canSave() && !savingField && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(200); }
   host.addEventListener("click", async event => { const button = event.target.closest("[data-hero-action]"); if (!button) return; const { heroAction: action, id } = button.dataset; if (action === "new") return createHero(); if (action === "edit") { if (isPlayer() && id !== store.access?.heroId) return; if (!mayDiscard()) return; edit(id); return; } if (isPlayer() || !canSave()) { status("Brak uprawnień lub połączenia."); return; } try { if (action === "battle") { const inBattle = store.getState().heroParticipants.some(p => p.heroId === id); if (inBattle) { if (confirm("Usunąć bohatera z potyczki? Arkusz bohatera zostanie zachowany.")) await store.removeParticipant("hero:" + id); } else await store.addHero(id); } else if (action === "delete" && confirm("Usunąć bohatera oraz jego udział w walce?")) { const heroes = store.getState().heroes, index = heroes.findIndex(hero => hero.id === id), next = heroes[index + 1] || heroes[index - 1]; await store.deleteHero(id); if (editingId === id) { editingId = next ? next.id : null; draftDirty = false; dirtyFields.clear(); if (editingId) edit(editingId); } } } catch (error) { status(saveError(error)); } });
   list.addEventListener("keydown", event => { const tabs = [...listCards.values()]; if (!tabs.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const current = tabs.indexOf(event.target.closest('[role="tab"]')); let index = current; if (event.key === "Home") index = 0; else if (event.key === "End") index = tabs.length - 1; else index = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; const target = tabs[index]; if (target && mayDiscard()) { edit(target.dataset.id); target.focus(); } });
   battleList.addEventListener("click", async event => { const button = event.target.closest("button"); if (!button) return; const id = button.dataset.id; if (button.dataset.heroAction === "edit") { if (!mayDiscard()) return; document.querySelector('[data-tab="heroes"]').click(); edit(id.replace(/^hero:/, "")); return; } if (isPlayer() || !canSave()) return; try { if (button.dataset.heroResource) await store.adjustResource(id, button.dataset.heroResource, Number(button.dataset.change)); else if (button.dataset.heroAction === "remove") await store.removeParticipant(id); else if (button.dataset.heroAction === "defeated") await store.toggleDefeated(id); } catch (error) { status(saveError(error)); } });
-  form.addEventListener("input", event => { if (fields.includes(event.target.name)) { if (!draftDirty) draftVersion = store.heroVersions?.[editingId] ?? null; draftDirty = true; dirtyFields.add(event.target.name); status("Niezapisane zmiany"); } });
-  let savingField = false;
-  async function saveField(name) { if (!editingId || savingField || !dirtyFields.has(name)) return; if (!validForm([name])) { status("Popraw zaznaczone pole."); return; } if (!canSave()) { status("Brak połączenia. Zmiany czekają na zapis."); form.querySelector(".hero-retry").hidden = false; return; } const control = form.elements[name], value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim(), sent = booleans.has(name) ? control.checked : control.value; savingField = true; status("Zapisywanie…"); try { await store.saveHero({ id: editingId, [name]: value }, draftVersion); if ((booleans.has(name) ? control.checked : control.value) === sent) dirtyFields.delete(name); draftDirty = dirtyFields.size > 0; draftVersion = draftDirty ? store.heroVersions?.[editingId] ?? null : null; syncEditor(); status(draftDirty ? "Niezapisane zmiany" : "Zapisano"); form.querySelector(".hero-retry").hidden = !draftDirty; } catch (error) { status(saveError(error) + " Ponów zapis po sprawdzeniu zmian."); form.querySelector(".hero-retry").hidden = false; } finally { savingField = false; } }
-  form.addEventListener("change", event => { const name = event.target.name; if (!fields.includes(name)) return; if (!draftDirty) draftVersion = store.heroVersions?.[editingId] ?? null; dirtyFields.add(name); draftDirty = true; saveField(name); });
-  form.addEventListener("click", async event => { if (!event.target.closest(".hero-retry")) return; draftVersion = store.heroVersions?.[editingId] ?? null; for (const name of [...dirtyFields]) await saveField(name); });
+  let savingField = false, saveTimer = null;
+  function scheduleSave(delay = 500) { clearTimeout(saveTimer); saveTimer = setTimeout(saveField, delay); }
+  function changedField(event) {
+    const name = event.target.name;
+    if (!fields.includes(name) || event.isComposing) return;
+    if (!draftDirty || conflictFields.size) draftVersion = store.heroVersions?.[editingId] ?? null;
+    conflictFields.delete(name); draftDirty = true; dirtyFields.add(name);
+    syncInjury(form, heroById(editingId), dirtyFields); updateResourceWarnings(form);
+    status("Niezapisane zmiany"); scheduleSave();
+  }
+  form.addEventListener("input", changedField);
+  form.addEventListener("change", event => { if (!fields.includes(event.target.name)) return; if (!dirtyFields.has(event.target.name)) changedField(event); if (!conflictFields.has(event.target.name)) scheduleSave(0); });
+  form.addEventListener("compositionend", changedField);
+  async function saveField() {
+    if (!editingId || savingField || !dirtyFields.size) return;
+    if (!canSave()) { status("Brak połączenia. Zmiany czekają na zapis."); return; }
+    const name = [...dirtyFields].find(field => !conflictFields.has(field));
+    if (!name) { status(conflictStatus); return; }
+    if (!validForm([name])) { status("Popraw zaznaczone pole."); return; }
+    const id = editingId, control = form.elements[name];
+    const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim();
+    const sent = booleans.has(name) ? control.checked : control.value;
+    savingField = true; let succeeded = false; status("Zapisywanie…");
+    try {
+      await store.saveHero({ id, [name]: value }, draftVersion);
+      succeeded = true;
+      if (editingId !== id) return;
+      if ((booleans.has(name) ? control.checked : control.value) === sent) dirtyFields.delete(name);
+      draftDirty = dirtyFields.size > 0;
+      draftVersion = draftDirty ? store.heroVersions?.[id] ?? null : null;
+      syncEditor(); status(conflictFields.size ? conflictStatus : draftDirty ? "Niezapisane zmiany" : "Zapisano");
+    } catch (error) {
+      if (editingId !== id) return;
+      if (error?.status === 409) { for (const field of dirtyFields) conflictFields.add(field); status(conflictStatus); }
+      else status("Zapis nie powiódł się. Zmiany czekają na połączenie.");
+    } finally {
+      savingField = false;
+      if (succeeded && dirtyFields.size && canSave() && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(500);
+    }
+  }
   form.addEventListener("submit", event => { event.preventDefault(); const active = document.activeElement; if (active && form.contains(active) && typeof active.blur === "function") active.blur(); });
   function syncHeader() { const hero = heroById(editingId), button = form.querySelector('[data-hero-action="battle"]'); if (!hero || !button) return; const inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); button.textContent = inBattle ? "Usuń z potyczki" : "Dodaj do potyczki";  }
   document.querySelector(".tabs").addEventListener("click", event => {
     const tab = event.target.closest("[data-tab]");
     if (tab && tab.dataset.tab === "heroes") { syncEditor(); syncHeader(); }
-    if (tab && tab.dataset.tab !== "heroes" && draftDirty) { if (!confirm("Niezapisany szkic zostanie porzucony.")) { event.preventDefault(); event.stopImmediatePropagation(); } else restoreEditor(); }
   }, true);
   store.subscribe(render); render();
 })();

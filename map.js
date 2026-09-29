@@ -375,9 +375,10 @@
       const symbol = el('span', 'map-token-symbol', person.type === 'hero' ? '✦' : '◆'); const label = el('span', 'map-token-label', names[index]); marker.append(symbol, label); tokens.appendChild(marker);
     });
   }
-  function addAdjuster(container, id, field, value, max, title) {
+  function addAdjuster(container, id, field, value, max, title, warning = false) {
     const box = el('div', 'map-resource'); box.dataset.field = field; box.appendChild(el('span', '', title));
-    const controls = el('div', 'map-resource-controls'), minus = el('button', '', '−'), number = el('strong', '', `${value ?? 0} / ${max ?? 0}`), plus = el('button', '', '+');
+    const controls = el('div', 'map-resource-controls'), minus = el('button', '', '−'), number = el('strong'), current = el('span', warning ? 'is-resource-warning' : '', String(value ?? 0)), plus = el('button', '', '+');
+    number.append(current, doc.createTextNode(` / ${max ?? 0}`));
     minus.type = plus.type = 'button'; minus.setAttribute('aria-label', `Zmniejsz ${title.toLowerCase()}`); plus.setAttribute('aria-label', `Zwiększ ${title.toLowerCase()}`);
     for (const [button, delta] of [[minus, -1], [plus, 1]]) button.addEventListener('click', () => {
       const own = isPlayer() && !store.getParticipants().some(p => p.id === id) ? store.getState().heroes.find(h => 'hero:' + h.id === id) : null;
@@ -466,8 +467,8 @@
       stance.addEventListener('change', () => saveHeroField(person, stance, 'stance', stance.value));
       stanceLabel.appendChild(stance); panel.appendChild(stanceLabel);
     }
-    const resources = el('div', 'map-resources'); addAdjuster(resources, person.id, 'endurance', person.endurance, person.maxEndurance, 'Wytrzymałość');
-    if (person.type === 'hero') addAdjuster(resources, person.id, 'hope', person.hope, person.maxHope, 'Nadzieja');
+    const resources = el('div', 'map-resources'); addAdjuster(resources, person.id, 'endurance', person.endurance, person.maxEndurance, 'Wytrzymałość', person.type === 'hero' && person.endurance <= person.load && !person.weary);
+    if (person.type === 'hero') addAdjuster(resources, person.id, 'hope', person.hope, person.maxHope, 'Nadzieja', person.hope <= person.shadow && !person.miserable);
     else addAdjuster(resources, person.id, 'hate', person.hate, person.maxHate, person.resourceType === 'determination' ? 'Determinacja' : 'Nienawiść');
     panel.appendChild(resources);
     const facts = el('div', 'map-panel-facts map-panel-hero-facts');

@@ -109,14 +109,40 @@ async function main() {
     await one.page.locator('#map-panel input[name="wounded"]').check();
     await one.page.waitForFunction(() => OneRingStore.getState().heroes[0].wounded);
     assert.equal(await one.page.locator('#map-panel input[name="injury"]').isEnabled(), true);
+    await refresh(gm.page);
+    await gm.page.evaluate(id => OneRingStore.saveHero({ id, endurance: 2, load: 3, hope: 1, shadow: 2, weary: false, miserable: false }), heroOne.id);
+    await refresh(one.page);
+    for (const field of ['endurance', 'hope']) {
+      const value = one.page.locator(`#map-panel .map-resource[data-field="${field}"] strong > span.is-resource-warning`);
+      assert.equal(await value.count(), 1);
+      assert.equal(await value.evaluate(node => getComputedStyle(node).color), 'rgb(161, 47, 40)');
+      assert.notEqual(await value.locator('..').evaluate(node => getComputedStyle(node).color), 'rgb(161, 47, 40)');
+    }
+    await one.page.locator('#map-hero-sheet .sheet-character > summary').click();
+    for (const field of ['endurance', 'hope']) assert.equal(await one.page.locator(`#map-hero-sheet input[name="${field}"].is-resource-warning`).count(), 1);
+    const embeddedAge = one.page.locator('#map-hero-sheet input[name="age"]');
+    await embeddedAge.fill('38');
+    await one.page.waitForFunction(id => OneRingStore.getState().heroes.find(h => h.id === id).age === '38', heroOne.id);
+    await one.page.locator('#map-hero-sheet input[name="miserable"]').check();
+    assert.equal(await one.page.locator('#map-hero-sheet input[name="hope"].is-resource-warning').count(), 0);
+    await one.page.waitForFunction(id => OneRingStore.getState().heroes.find(h => h.id === id).miserable, heroOne.id);
+    await one.page.locator('#map-panel input[name="weary"]').check();
+    await one.page.waitForFunction(id => OneRingStore.getState().heroes.find(h => h.id === id).weary, heroOne.id);
+    assert.equal(await one.page.locator('#map-panel .map-resource[data-field="endurance"] strong > span.is-resource-warning').count(), 0);
     console.log('PASS: own compact hero panel and public defeated tokens');
 
 
     await one.page.locator('[data-tab="heroes"]').click();
     const culture = one.page.locator('#hero-editor input[name="culture"]');
     await culture.fill('Shire updated');
-    await culture.blur();
     await one.page.waitForFunction(id => window.OneRingStore.getState().heroes.find(h => h.id === id)?.culture === 'Shire updated', heroOne.id);
+    assert.equal(await one.page.locator('#hero-editor input[name="hope"].is-resource-warning').count(), 0);
+    assert.equal(await one.page.locator('#hero-editor input[name="endurance"].is-resource-warning').count(), 0);
+    await one.page.locator('#hero-editor input[name="miserable"]').uncheck();
+    assert.equal(await one.page.locator('#hero-editor input[name="hope"].is-resource-warning').count(), 1);
+    await one.page.locator('#hero-editor input[name="weary"]').uncheck();
+    assert.equal(await one.page.locator('#hero-editor input[name="endurance"].is-resource-warning').count(), 1);
+    await one.page.waitForFunction(id => { const h = OneRingStore.getState().heroes.find(h => h.id === id); return !h.weary && !h.miserable; }, heroOne.id);
     await refresh(gm.page);
     assert.equal((await state(gm.page)).heroes.find(h => h.id === heroOne.id).culture, 'Shire updated');
     console.log('PASS: own hero edit reaches GM');
@@ -143,12 +169,16 @@ async function main() {
     await two.page.locator('[data-tab="heroes"]').click();
     const name = two.page.locator('#hero-editor input[name="name"]');
     await name.fill('Bartek offline'); await name.blur();
+    await two.page.locator('#hero-editor input[name="calling"]').fill('Wędrowiec');
+    await two.page.locator('#hero-editor input[name="age"]').fill('40');
     assert.equal(await name.inputValue(), 'Bartek offline');
     assert.equal(fixture.document.state.heroes.find(h => h.id === heroTwo.id).name, 'Bartek');
+    await two.page.locator('[data-tab="map"]').click();
     fixture.setOffline(uid, false);
     await refresh(two.page);
-    await two.page.locator('#hero-editor .hero-retry').click();
-    await two.page.waitForFunction(id => window.OneRingStore.getState().heroes.find(h => h.id === id)?.name === 'Bartek offline', heroTwo.id);
+    await two.page.waitForFunction(id => { const h = window.OneRingStore.getState().heroes.find(h => h.id === id); return h?.name === 'Bartek offline' && h?.calling === 'Wędrowiec' && h?.age === '40'; }, heroTwo.id);
+    await two.page.locator('[data-tab="heroes"]').click();
+    assert.equal(await two.page.locator('#hero-editor .hero-retry').count(), 0);
     assert.equal(await two.page.locator('.hero-heading h2').textContent(), 'Mój bohater');
     console.log('PASS: offline edit retained and retried after recovery');
 
@@ -156,13 +186,16 @@ async function main() {
     await pending.fill('Pending conflict');
     await refresh(gm.page);
     await gm.page.evaluate(id => window.OneRingStore.saveHero({ id, culture: 'GM changed' }), heroTwo.id);
-    await pending.blur();
-    await two.page.locator('#hero-editor .hero-retry').waitFor({ state: 'visible' });
+    await two.page.locator('#hero-editor .hero-save-status').getByText('Konflikt zapisu', { exact: false }).waitFor();
     assert.equal(await pending.inputValue(), 'Pending conflict');
     assert.equal(fixture.document.state.heroes.find(h => h.id === heroTwo.id).culture, 'GM changed');
-    await two.page.locator('#hero-editor .hero-retry').click();
-    await two.page.waitForFunction(id => window.OneRingStore.getState().heroes.find(h => h.id === id)?.culture === 'Pending conflict', heroTwo.id);
-    console.log('PASS: 409 retains draft and explicit retry writes it');
+    await two.page.locator('#hero-editor input[name="age"]').fill('41');
+    await two.page.waitForFunction(id => window.OneRingStore.getState().heroes.find(h => h.id === id)?.age === '41', heroTwo.id);
+    assert.equal(fixture.document.state.heroes.find(h => h.id === heroTwo.id).culture, 'GM changed');
+    assert.equal(await pending.inputValue(), 'Pending conflict');
+    await pending.fill('Pending conflict revised');
+    await two.page.waitForFunction(id => window.OneRingStore.getState().heroes.find(h => h.id === id)?.culture === 'Pending conflict revised', heroTwo.id);
+    console.log('PASS: 409 keeps conflicting field while other queued edits save');
 
     const config = { actor: 'hero', baseDice: 1, bonus: 0, featMode: 'normal', target: 10, hope: false, inspired: false, enemyResource: false, miserable: false, exhausted: false };
     const raw = { feat: [12], success: [1] };
