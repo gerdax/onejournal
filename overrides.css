@@ -41,7 +41,7 @@ body {
 .shell {
   max-width: 1180px;
   min-height: 100vh;
-  padding-top: 32px;
+  padding-top: 8px;
   background: var(--cream);
 }
 
