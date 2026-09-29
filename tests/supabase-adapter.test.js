@@ -32,3 +32,9 @@ test('repeated unauthorized response stops after one retry', async () => {
   await assert.rejects(f.transport.request({ action: 'snapshot' }), { status: 401 });
   assert.equal(f.calls.length, 3);
 });
+
+test('invalid refresh token is a recoverable-by-link session expiry, not an online write error', async () => {
+  const f = fixture(url => url.includes('/token?') ? [400, { error: 'invalid refresh token' }] : [401, { error: 'expired' }]);
+  await assert.rejects(f.transport.request({ action: 'snapshot' }), { status: 401, message: 'Sesja wygasła. Otwórz aktualny link dostępu do gry.' });
+  assert.equal(f.calls.length, 2);
+});

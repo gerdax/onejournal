@@ -161,6 +161,7 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
             const wrapper = args[0];
             args[0] = wrapper.state;
             doc.rolls = restoredRolls(wrapper.rolls, uid);
+            doc.rollEpoch = (doc.rollEpoch || 0) + 1;
           }
           if (request.method === "saveHero" && access.role === "gm" && args[0].id && !doc.state.heroes.some(h => h.id === args[0].id)) delete args[0].id;
           try { output = resultOf(request.method, args, doc); }

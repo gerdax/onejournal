@@ -32,7 +32,13 @@
         const path = session?.refresh_token ? '/auth/v1/token?grant_type=refresh_token' : '/auth/v1/signup';
         const body = session?.refresh_token ? { refresh_token: session.refresh_token } : {};
         remember(await fetchJSON(base + path, { method: 'POST', headers: { apikey: key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
-      })().finally(() => { refreshing = null; });
+      })().catch(error => {
+        if (session?.refresh_token && [400, 401].includes(error.status)) {
+          error.status = 401;
+          error.message = 'Sesja wygasła. Otwórz aktualny link dostępu do gry.';
+        }
+        throw error;
+      }).finally(() => { refreshing = null; });
       return refreshing;
     }
     async function edge(body) {

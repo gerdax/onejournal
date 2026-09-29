@@ -314,3 +314,13 @@ test('enemy editor writes reject Might above five', async () => {
     await f.core.handle('gm', { action: 'command', method, args: [{ name: 'Ork', might: 5 }] });
   }
 });
+
+test('replacing history from backup invalidates unpublished old rolls', async () => {
+  const f = fixture();
+  const backup = await f.core.handle('gm', { action: 'export' });
+  await f.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [backup] });
+  assert.equal(f.doc.rollEpoch, 1);
+  const config = { actor: 'hero', baseDice: 0, bonus: 0, featMode: 'normal', hope: false, inspired: false, enemyResource: false, miserable: false, exhausted: false };
+  await assert.rejects(f.core.handle('gm', { action: 'roll', id: 'old-before-restore', rollEpoch: 0, config, raw: { feat: [1], success: [] } }), { status: 409 });
+  assert.equal(f.doc.rolls.length, 0);
+});
