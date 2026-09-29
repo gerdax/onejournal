@@ -57,7 +57,7 @@
 .map-resource > span { color: var(--clay); font: 700 10px 'DM Mono', monospace; letter-spacing: .04em; text-transform: uppercase; }
 .map-resource-controls { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 7px; }
 .map-resource-controls strong { white-space: nowrap; font: 600 21px Fraunces, Georgia, serif; }
-.map-resource-controls .is-resource-warning, .map-panel-facts .is-resource-warning { color: #be5a4f; }
+.map-resource-controls .is-resource-warning, .map-panel-facts .is-resource-warning, .map-panel-conditions .is-resource-warning { color: #be5a4f; }
 .map-resource-controls button { width: 29px; height: 29px; border: 1px solid var(--line); background: #fffdf8; color: var(--ink); cursor: pointer; font-size: 18px; }
 .map-panel-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 17px; }
 .map-panel-hero-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }

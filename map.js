@@ -483,7 +483,7 @@
       for (const [label, field] of [['Wyczerpanie', 'weary'], ['Przygnębienie', 'miserable'], ['Rana', 'wounded']]) {
         const wrapper = el('label'), input = el('input'); input.type = 'checkbox'; input.name = field; input.checked = !!person[field];
         input.addEventListener('change', () => saveHeroField(person, input, field, input.checked));
-        wrapper.append(input, doc.createTextNode(label)); conditions.appendChild(wrapper);
+        wrapper.append(input, el('span', warnings[field] ? 'is-resource-warning' : '', label)); conditions.appendChild(wrapper);
       }
       const injuryLabel = el('label', 'map-panel-injury', 'Stopień rany'), injury = el('input');
       injury.type = 'text'; injury.name = 'injury'; injury.disabled = !person.wounded; injury.value = person.wounded ? person.injury || '' : '';

@@ -8,19 +8,19 @@ const base = {
 };
 
 assert.deepEqual(getResourceWarnings(base), {
-  endurance: false, hope: false, load: false, expectedLoad: 5
+  endurance: false, hope: false, load: false, weary: false, miserable: false, expectedLoad: 5
 });
 assert.deepEqual(getResourceWarnings({ ...base, endurance: 11, hope: 3 }), {
-  endurance: true, hope: true, load: false, expectedLoad: 5
+  endurance: true, hope: true, load: false, weary: false, miserable: false, expectedLoad: 5
 });
 assert.deepEqual(getResourceWarnings({ ...base, endurance: 11, hope: 3, weary: true, miserable: true }), {
-  endurance: false, hope: false, load: false, expectedLoad: 5
+  endurance: false, hope: false, load: false, weary: false, miserable: false, expectedLoad: 5
 });
 assert.deepEqual(getResourceWarnings({ ...base, weapon0Load: '1,5', weapon1Load: '', helmLoad: '0,5', treasure: 1 }), {
-  endurance: false, hope: false, load: false, expectedLoad: 5
+  endurance: false, hope: false, load: false, weary: false, miserable: false, expectedLoad: 5
 });
 assert.deepEqual(getResourceWarnings({ ...base, treasure: 1 }), {
-  endurance: false, hope: false, load: true, expectedLoad: 6
+  endurance: false, hope: false, load: true, weary: false, miserable: false, expectedLoad: 6
 });
 assert.equal(getResourceWarnings({ ...base, treasure: 'not a number' }).load, false,
   'invalid unsaved drafts should not trigger a misleading mismatch');
@@ -38,6 +38,8 @@ for (const field of ['weapon2Load', 'weapon3Load', 'helmLoad', 'shieldLoad', 'tr
     classList: { toggle(name, enabled) { if (enabled) elements[field].classes.add(name); else elements[field].classes.delete(name); } }
   };
 }
+const labelClasses = { weary: new Set(), miserable: new Set() };
+for (const field of ['weary', 'miserable']) elements[field].closest = () => ({ querySelector: () => ({ classList: { toggle(name, on) { if (on) labelClasses[field].add(name); else labelClasses[field].delete(name); } } }) });
 const editor = { elements };
 const warned = field => elements[field].classes.has('is-resource-warning');
 updateResourceWarnings(editor);
@@ -62,3 +64,12 @@ updateResourceWarnings(editor);
 assert.equal(warned('hope'), false);
 
 console.log('Hero resource warnings passed: thresholds, load sum, conditions and live toggles.');
+
+elements.endurance.value = '20'; elements.hope.value = '10';
+updateResourceWarnings(editor);
+assert(labelClasses.weary.has('is-resource-warning'));
+assert(labelClasses.miserable.has('is-resource-warning'));
+elements.endurance.value = '12'; elements.hope.value = '3';
+updateResourceWarnings(editor);
+assert(!labelClasses.weary.has('is-resource-warning'));
+assert(!labelClasses.miserable.has('is-resource-warning'));
