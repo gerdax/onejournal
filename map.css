@@ -121,7 +121,6 @@
 .map-viewport.is-fullscreen .map-fullscreen-controls { top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); }
 #map-enemy-notes > .map-panel-detail { padding-top: 12px; font-size: 15px; white-space: pre-wrap; }
 
-.map-viewport.is-fullscreen .map-zoom-controls:not(.map-fullscreen-controls):not(.map-center-controls),
-.map-viewport:fullscreen .map-zoom-controls:not(.map-fullscreen-controls):not(.map-center-controls) {
+.map-viewport .map-zoom-controls:not(.map-fullscreen-controls):not(.map-center-controls) {
   top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); right: auto; bottom: auto;
 }

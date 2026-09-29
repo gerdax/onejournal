@@ -265,6 +265,7 @@
   const doc = root.document, store = root.OneRingStore, section = doc.getElementById('map');
   if (!section || !store) return;
   const isPlayer = () => store.access?.role === 'player';
+  const viewSelection = () => isPlayer() ? store.getParticipants().find(p => p.type === 'hero' && p.heroId === store.access.heroId)?.id || null : store.selection || null;
   const canSave = () => store.connection === 'online' && store.canWrite;
   let currentMap = null, selected = null, pendingSelection = null, zoom = 1, offsetX = 0, offsetY = 0, fittedKey = '', gesture = null;
   const touchPoints = new Map();
@@ -527,7 +528,7 @@
   function zoomAt(factor, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) { if (!currentMap) return; const next = clamp(zoom * factor, .1, 3); offsetX = x - (x - offsetX) * next / zoom; offsetY = y - (y - offsetY) * next / zoom; zoom = next; transform(); }
   function refresh(snapshot) {
     const map = snapshot.map, participants = store.getParticipants();
-    selected = store.selection || null;
+    selected = viewSelection();
     const key = map ? JSON.stringify([map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
     const terrainChanged = key !== fittedKey;
     if (terrainChanged) { gesture = null; touchPoints.clear(); touchGesture = null; touchLocked = false; }
@@ -635,7 +636,7 @@
     if (gesture && gesture.type === 'token') {
       gesture.node.style.left = gesture.x + 'px';
       gesture.node.style.top = gesture.y + 'px';
-      selected = store.selection || null;
+      selected = viewSelection();
       renderPanel(store.getParticipants());
       tokens.querySelectorAll('.map-token').forEach(node => node.classList.toggle('is-selected', node.dataset.id === selected));
     }
@@ -730,7 +731,7 @@
     selected = id;
     if (currentMap) renderTokens(currentMap, participants);
     renderPanel(participants);
-    run(() => store.selectToken(id)).then(ok => { if (pendingSelection !== id) return; pendingSelection = null; if (!ok) { selected = store.selection || null; if (currentMap) renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); } });
+    run(() => store.selectToken(id)).then(ok => { if (pendingSelection !== id) return; pendingSelection = null; if (!ok) { selected = viewSelection(); if (currentMap) renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); } });
   }
   root.OneRingMap = { generateTerrain, fit, selectParticipant };
 })(typeof window !== 'undefined' ? window : null);

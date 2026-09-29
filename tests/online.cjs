@@ -67,7 +67,8 @@ async function main() {
       await refresh(page);
       await page.locator('[data-tab="map"]').click();
       await page.waitForFunction(id => window.OneRingStore.selection === id, enemyId);
-      assert.equal(await page.locator(`.map-token[data-id="${enemyId}"]`).evaluate(node => node.classList.contains('is-selected')), true);
+      assert.equal(await page.locator(`.map-token[data-id="${enemyId}"]`).evaluate(node => node.classList.contains('is-selected')), false);
+      assert.equal(await page.locator('.map-token.is-selected').getAttribute('data-id'), await page.evaluate(() => 'hero:' + OneRingStore.access.heroId));
       assert.equal(await page.locator('#map-panel').textContent().then(text => text.includes('Ork Sekretny')), false);
       assert.equal(await page.locator('#map-panel h3').textContent(), await page.evaluate(() => OneRingStore.getState().heroes[0].name));
       assert.equal(await page.locator('#map-panel .map-panel-remove').count(), 0);
@@ -88,7 +89,17 @@ async function main() {
     await one.page.mouse.up();
     assert.deepEqual(fixture.document.state.map.positions[enemyId], before);
     assert.equal(fixture.document.selection, enemyId);
-    console.log('PASS: shared GM selection and read-only player tokens');
+    assert.equal(await gm.page.locator('.map-token.is-selected').getAttribute('data-id'), enemyId);
+    for (const { page } of [gm, one, two]) {
+      for (const full of [false, true]) {
+        if (full) await page.locator('#map-fullscreen').click();
+        const mapBox = await page.locator('#map-viewport').boundingBox();
+        const fitBox = await page.locator('#map-fit').boundingBox();
+        assert(fitBox.x - mapBox.x < 40 && fitBox.y - mapBox.y < 40);
+        if (full) await page.locator('#map-fullscreen').click();
+      }
+    }
+    console.log('PASS: GM selected enemy, players own hero highlight, read-only tokens, top-left controls in both map modes');
     assert.equal(await gm.page.locator('#leave-session').count(), 0);
     await gm.page.evaluate(id => OneRingStore.toggleDefeated(id), enemyId);
     await refresh(one.page); await refresh(two.page);
