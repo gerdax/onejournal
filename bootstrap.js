@@ -60,3 +60,29 @@
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js', { scope: './' }).catch(() => {});
   boot();
 })();
+
+// Measure rendered labels, including user font scaling and the player's name.
+(function () {
+  const nav = document.querySelector('.tabs');
+  let frame;
+  function fit() {
+    frame = null;
+    if (!nav.getClientRects().length) return;
+    nav.classList.remove('nav-hide-count', 'nav-short-label');
+    const fits = () => {
+      const items = [...nav.children].filter(node => node.getClientRects().length);
+      const gap = parseFloat(getComputedStyle(nav).columnGap) || 0;
+      return items.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0)
+        + gap * Math.max(0, items.length - 1) <= nav.clientWidth + 0.5;
+    };
+    if (!fits()) nav.classList.add('nav-hide-count');
+    if (!fits()) nav.classList.add('nav-short-label');
+  }
+  function schedule() { if (frame == null) frame = requestAnimationFrame(fit); }
+  new ResizeObserver(schedule).observe(nav);
+  new MutationObserver(schedule).observe(nav, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  window.addEventListener('resize', schedule);
+  document.fonts.ready.then(schedule);
+  document.fonts.addEventListener('loadingdone', schedule);
+  schedule();
+})();

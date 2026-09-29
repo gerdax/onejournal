@@ -54,3 +54,12 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 
 body[data-role="player"] #heroes > .hero-heading,
 body[data-role="player"] #map > .map-heading { display: none; }
+
+/* Shrink navigation content only when its actual width requires it. */
+.tabs > .tab { flex-shrink: 0; white-space: nowrap; }
+.tabs .tab :is(.nav-label-long, .nav-label-short) { background: none; font: inherit; border-radius: 0; margin: 0; padding: 0; }
+.tabs .nav-label-short { display: none; }
+.tabs.nav-hide-count #map-count { display: none; }
+.tabs.nav-short-label .nav-label-long { display: none; }
+.tabs.nav-short-label .nav-label-short { display: inline; }
+.tabs.nav-short-label > .tab { padding-inline: 4px; }
