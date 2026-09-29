@@ -73,10 +73,17 @@
 .sheet-column-bottom textarea { min-height: 135px; }
 .sheet-gear > h3, .sheet-bottom h3 { margin-bottom: 14px; }
 .sheet-gear-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px; }
-.sheet-weapon-row { display: grid; grid-template-columns: 1.6fr .7fr .7fr .7fr 1.5fr; gap: 6px; margin-bottom: 8px; }
+.sheet-gear-row { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: end; }
+.sheet-gear-row > .sheet-gear-toggle { align-self: center; }
+.sheet-gear-row .sheet-gear-fields { min-width: 0; }
+.sheet-gear-row.is-inactive .sheet-gear-fields { opacity: .45; }
+.sheet-gear-row.is-inactive .sheet-gear-fields input { cursor: not-allowed; }
+.sheet-weapon-row { margin-bottom: 8px; }
+.sheet-weapon-row .sheet-gear-fields { display: grid; grid-template-columns: 1.6fr .7fr .7fr .7fr 1.5fr; gap: 6px; }
 .sheet-weapon-row + .sheet-weapon-row label { font-size: 0; gap: 0; }
 .sheet-armour { padding-left: 18px; border-left: 1px solid #be8171; }
-.sheet-armour > div { display: grid; grid-template-columns: minmax(0, 1fr) 62px 62px; gap: 6px; align-items: end; margin-bottom: 12px; }
+.sheet-armour > div { margin-bottom: 12px; }
+.sheet-armour .sheet-gear-fields { display: grid; grid-template-columns: minmax(0, 1fr) 62px 62px; gap: 6px; align-items: end; }
 .sheet-armour input[type=number], .sheet-weapon-row input[type=number], .sheet-name-row input[name=treasure] { font-size: 16px; padding: 7px 2px; }
 .sheet-bottom { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; border-top: 2px solid #be8171; padding-top: 22px; }
 .sheet-points { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
@@ -90,8 +97,8 @@
   .skill-row { grid-template-columns: 18px minmax(0, 1fr) 74px; gap: 5px; }
   .sheet-gear-grid { grid-template-columns: 1fr; }
   .sheet-armour { border-left: 0; padding-left: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-  .sheet-armour > div { grid-template-columns: 1fr 1fr; }
-  .sheet-armour > div > div:first-child { grid-column: 1 / -1; }
+  .sheet-armour .sheet-gear-fields { grid-template-columns: 1fr 1fr; }
+  .sheet-armour .sheet-gear-fields > div:first-child { grid-column: 1 / -1; }
 }
 @media (max-width: 700px) {
   .hero-editor { padding: 16px; gap: 20px; }
@@ -108,12 +115,13 @@
   .skill-row { grid-template-columns: 22px minmax(0, 1fr) 116px; min-height: 44px; }
   .hero-editor .skill-rating { min-height: 40px; font-size: 15px; }
   .sheet-column-bottom .skill-row { grid-template-columns: minmax(0, 1fr) 116px; }
-  .sheet-weapon-row { grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #ddc4b8; padding-bottom: 12px; margin-bottom: 12px; }
-  .sheet-weapon-row > div:first-child, .sheet-weapon-row > div:last-child { grid-column: 1 / -1; }
+  .sheet-weapon-row { border-bottom: 1px solid #ddc4b8; padding-bottom: 12px; margin-bottom: 12px; }
+  .sheet-weapon-row .sheet-gear-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sheet-weapon-row .sheet-gear-fields > div:first-child, .sheet-weapon-row .sheet-gear-fields > div:last-child { grid-column: 1 / -1; }
   .sheet-weapon-row + .sheet-weapon-row label { font-size: 10px; gap: 5px; }
   .sheet-armour { grid-template-columns: 1fr; }
-  .sheet-armour > div { grid-template-columns: minmax(0, 1fr) 66px 66px; }
-  .sheet-armour > div > div:first-child { grid-column: auto; }
+  .sheet-armour .sheet-gear-fields { grid-template-columns: minmax(0, 1fr) 66px 66px; }
+  .sheet-armour .sheet-gear-fields > div:first-child { grid-column: auto; }
   .sheet-background { grid-template-columns: 1fr; }
   .hero-editor-top { flex-wrap: nowrap; }
   .hero-editor-actions { width: auto; margin-left: auto; }

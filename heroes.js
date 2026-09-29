@@ -1,6 +1,8 @@
 (function () {
   "use strict";
   const loadParts = ["weapon0Load", "weapon1Load", "weapon2Load", "weapon3Load", "armourLoad", "helmLoad", "shieldLoad", "treasure"];
+  const gearFlags = ["weapon0Enabled", "weapon1Enabled", "weapon2Enabled", "weapon3Enabled", "helmEnabled", "shieldEnabled"];
+  const loadFlag = {weapon0Load:"weapon0Enabled", weapon1Load:"weapon1Enabled", weapon2Load:"weapon2Enabled", weapon3Load:"weapon3Enabled", helmLoad:"helmEnabled", shieldLoad:"shieldEnabled"};
   function resourceNumber(value) {
     if (value == null || String(value).trim() === "") return 0;
     const number = Number(String(value).trim().replace(",", "."));
@@ -9,7 +11,7 @@
   function getResourceWarnings(person) {
     const endurance = resourceNumber(person.endurance), load = resourceNumber(person.load);
     const fatigue = resourceNumber(person.fatigue), hope = resourceNumber(person.hope), shadow = resourceNumber(person.shadow);
-    const expectedLoad = loadParts.reduce((sum, field) => sum + resourceNumber(person[field]), 0);
+    const expectedLoad = loadParts.reduce((sum, field) => sum + (loadFlag[field] && person[loadFlag[field]] === false ? 0 : resourceNumber(person[field])), 0);
     return {
       endurance: !person.weary && Number.isFinite(endurance) && Number.isFinite(load + fatigue) && endurance <= load + fatigue,
       hope: !person.miserable && Number.isFinite(hope) && Number.isFinite(shadow) && hope <= shadow,
@@ -22,6 +24,7 @@
   function updateResourceWarnings(editor) {
     const person = {};
     for (const field of ["endurance", "load", "fatigue", "hope", "shadow", ...loadParts]) person[field] = editor.elements[field].value;
+    for (const flag of gearFlags) person[flag] = editor.elements[flag]?.checked !== false;
     person.weary = editor.elements.weary.checked;
     person.miserable = editor.elements.miserable.checked;
     const warnings = getResourceWarnings(person);
@@ -42,7 +45,7 @@
     [["Insight", "Przenikliwość"], ["Courtesy", "Uprzejmość"], ["Healing", "Uzdrawianie"], ["Enhearten", "Inspiracja"], ["Battle", "Wojaczka"], ["Travel", "Wędrówka"]],
     [["Scan", "Szukanie"], ["Riddle", "Zagadki"], ["Explore", "Rekonesans"], ["Persuade", "Przekonywanie"], ["Lore", "Wiedza"], ["Stealth", "Skradanie"]]
   ];
-  const booleans = new Set(["weary", "miserable", "wounded"]);
+  const booleans = new Set(["weary", "miserable", "wounded", ...gearFlags]);
   fields.push("age", "treasure", "calling", "culturalBlessing", "distinctiveFeatures", "flaws", "patron", "shadowPath", "injury", "rewards", "virtues", "equipment", "standardOfLiving", "armourName", "helmName", "shieldName");
   ["shadowScars", "valour", "wisdom", "adventurePoints", "skillPoints", "fellowship", "helmProtection", "armourLoad", "helmLoad", "shieldParry", "shieldLoad", "combatBows", "combatSwords", "combatAxes", "combatSpears"].forEach(name => { fields.push(name); numeric.add(name); });
   skillGroups.flat().forEach(([key]) => { const name = "skill" + key; fields.push(name); numeric.add(name); booleans.add(name + "Favoured"); });
@@ -59,6 +62,14 @@
   const canSave = () => store.connection === "online" && store.canWrite;
   const saveError = error => error?.message || "Nie udało się zapisać zmiany.";
   const conflictStatus = "Konflikt zapisu. Zmiany zachowano; edytuj pole, aby zapisać swoją wersję.";
+  const booleanValue = (hero, name) => gearFlags.includes(name) ? hero?.[name] !== false : !!hero?.[name];
+  function syncGearRows(editor) {
+    editor.querySelectorAll("[data-gear-flag]").forEach(row => {
+      const active = editor.elements[row.dataset.gearFlag].checked;
+      row.classList.toggle("is-inactive", !active);
+      row.querySelectorAll(".sheet-gear-fields input").forEach(control => { control.disabled = !active; });
+    });
+  }
 
   host.innerHTML = `<div class="section-heading hero-heading"><div><h2>Drużyna</h2></div><button type="button" class="text-button" data-hero-action="new">+ Nowy bohater</button></div><div class="heroes-layout"><div id="hero-list" class="hero-list" role="tablist" aria-label="Arkusze bohaterów"></div><div id="hero-empty-panel" class="hero-empty" hidden>Nie ma jeszcze bohaterów. Użyj „Nowy bohater”, aby utworzyć pierwszy arkusz.</div><form id="hero-editor" class="paper form-card hero-editor" role="tabpanel" aria-label="Arkusz bohatera" novalidate></form></div>`;
   const list = host.querySelector("#hero-list"), form = host.querySelector("#hero-editor");
@@ -70,12 +81,13 @@
     form.querySelectorAll('[data-sheet-section]').forEach(section => {
       sectionOpen[section.dataset.sheetSection] = section.open;
     });
-    const value = name => hero && hero[name] != null ? hero[name] : (numeric.has(name) ? 0 : name === "stance" ? "Wyważona" : "");
+    const value = name => gearFlags.includes(name) ? booleanValue(hero, name) : hero && hero[name] != null ? hero[name] : (numeric.has(name) ? 0 : name === "stance" ? "Wyważona" : "");
     const input = name => String(!hero && numeric.has(name) ? 0 : value(name)).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
     const textField = (label, name, cls = "") => `<div class="${cls}">${field(label, name, "text", `maxlength="300" value="${input(name)}"`)}</div>`;
     const numberField = (label, name) => field(label, name, "number", `min="0" value="${blankGearValue(name, value(name)) ? "" : input(name) || 0}"`);
     const area = (label, name, rows = 3) => `<label>${label}<textarea name="${name}" rows="${rows}" maxlength="4000"></textarea></label>`;
     const check = (label, name) => `<label class="sheet-check"><input type="checkbox" name="${name}" ${value(name) ? "checked" : ""}><span>${label}</span></label>`;
+    const gearCheck = (name, label, permanent = false) => `<input class="sheet-gear-toggle" type="checkbox" ${name ? `name="${name}"` : ""} aria-label="${label}" ${permanent ? `title="Zbroja jest zawsze aktywna." disabled checked` : value(name) ? "checked" : ""}>`;
     const rating = (label, name, favoured = false) => `<div class="skill-row">${favoured ? `<input type="checkbox" name="${name}Favoured" aria-label="${label}: umiejętność ulubiona" ${value(name + "Favoured") ? "checked" : ""}>` : ""}<span id="${form.id}-label-${name}">${label}</span><select class="skill-rating" name="${name}" aria-labelledby="${form.id}-label-${name}">${Array.from({length: 7}, (_, n) => `<option value="${n}">${n ? "◆".repeat(n) : "—"}</option>`).join("")}</select></div>`;
     const attributes = [["Siła", "strength", "strengthTN", "Max wytrz.", "maxEndurance"], ["Serce", "heart", "heartTN", "Max nadzieja", "maxHope"], ["Rozum", "wits", "witsTN", "Obrona", "parry"]];
     form.innerHTML = `<div class="hero-editor-top"><div class="hero-editor-actions"></div></div>
@@ -90,7 +102,7 @@
         </section>
       </div>
       <div class="sheet-columns">${attributes.map(([label, key, tn, resource, max], i) => `<section class="sheet-column"><h3>${label}</h3><div class="sheet-attribute">${numberField("Wartość", key)}${numberField("PT", tn)}${numberField(resource, max)}</div><div class="sheet-skills">${skillGroups[i].map(([key, label]) => rating(label, "skill" + key, true)).join("")}</div><section class="sheet-column-bottom">${i === 0 ? `<h3>Biegłości bojowe</h3>${[["Łuki", "Bows"], ["Miecze", "Swords"], ["Topory", "Axes"], ["Włócznie", "Spears"]].map(([label, key]) => rating(label, "combat" + key)).join("")}` : `<div class="sheet-section-heading"><h3>${i === 1 ? "Nagrody" : "Przymioty"}</h3>${numberField(i === 1 ? "Męstwo" : "Mądrość", i === 1 ? "valour" : "wisdom")}</div>${area(i === 1 ? "Zdobyte nagrody" : "Posiadane przymioty", i === 1 ? "rewards" : "virtues", 4)}`}</section></section>`).join("")}</div>
-      <section class="sheet-gear"><h3>Rynsztunek</h3><div class="sheet-gear-grid"><div class="sheet-weapons">${Array.from({length: 4}, (_, i) => `<div class="sheet-weapon-row">${[["Broń", "Name"], ["Obrażenia", "Damage"], ["Przebicie", "Injury"], ["Obciążenie", "Load"], ["Uwagi", "Notes"]].map(([label, key]) => (["Damage", "Load"].includes(key) ? numberField(label, `weapon${i}${key}`) : textField(label, `weapon${i}${key}`))).join("")}</div>`).join("")}</div><div class="sheet-armour">${[["Zbroja", "armourName", "Pancerz (k)", "armour", "armourLoad"], ["Hełm", "helmName", "Pancerz (k)", "helmProtection", "helmLoad"], ["Tarcza", "shieldName", "Obrona", "shieldParry", "shieldLoad"]].map(([label, name, protection, key, load]) => `<div>${textField(label, name)}${numberField(protection, key)}${numberField("Obciążenie", load)}</div>`).join("")}</div></div></section>
+      <section class="sheet-gear"><h3>Rynsztunek</h3><div class="sheet-gear-grid"><div class="sheet-weapons">${Array.from({length: 4}, (_, i) => `<div class="sheet-weapon-row sheet-gear-row" data-gear-flag="weapon${i}Enabled">${gearCheck(`weapon${i}Enabled`, `Broń ${i + 1}`)}<div class="sheet-gear-fields">${[["Broń", "Name"], ["Obrażenia", "Damage"], ["Przebicie", "Injury"], ["Obciążenie", "Load"], ["Uwagi", "Notes"]].map(([label, key]) => (["Damage", "Load"].includes(key) ? numberField(label, `weapon${i}${key}`) : textField(label, `weapon${i}${key}`))).join("")}</div></div>`).join("")}</div><div class="sheet-armour">${[["Zbroja", "armourName", "Pancerz (k)", "armour", "armourLoad", null], ["Hełm", "helmName", "Pancerz (k)", "helmProtection", "helmLoad", "helmEnabled"], ["Tarcza", "shieldName", "Obrona", "shieldParry", "shieldLoad", "shieldEnabled"]].map(([label, name, protection, key, load, flag]) => `<div class="sheet-gear-row" ${flag ? `data-gear-flag="${flag}"` : `title="Zbroja jest zawsze aktywna."`}>${gearCheck(flag, flag ? label : "Zbroja: zawsze aktywna", !flag)}<div class="sheet-gear-fields">${textField(label, name)}${numberField(protection, key)}${numberField("Obciążenie", load)}</div></div>`).join("")}</div></div></section>
       <div class="sheet-bottom"><section><h3>Ekwipunek</h3>${area("Przedmioty i wyposażenie", "equipment", 5)}</section><section class="sheet-progress">${textField("Poziom życia", "standardOfLiving")}<div class="sheet-points">${numberField("Punkty przygody", "adventurePoints")}${numberField("Punkty umiejętności", "skillPoints")}${numberField("Poziom zażyłości", "fellowship")}</div></section></div>
       <details class="sheet-extra sheet-disclosure"><summary>Notatki</summary><div>${area("Notatki bohatera", "notes")}</div></details>
       <div class="form-actions hero-editor-footer"><div class="hero-editor-footer-actions"></div><span class="hero-save-status" role="status" aria-live="polite">Zapisano</span></div>`;
@@ -118,6 +130,7 @@
       section.append(content);
     });
     fields.forEach(name => { const control = form.elements[name]; if (!control) return; if (booleans.has(name)) { const next = !!value(name); if (control.checked !== next) control.checked = next; } else { const next = displayValue(control, value(name)); if (control.value !== next) control.value = next; } });
+    syncGearRows(form);
     const shadowMin = String(hero ? hero.shadowScars : 0);
     if (form.elements.shadow.min !== shadowMin) form.elements.shadow.min = shadowMin;
     syncInjury(form, hero);
@@ -188,13 +201,13 @@
               fields.forEach(name => {
                 const control = editor.elements[name];
                 if (!control || dirty.has(name) || (name === "injury" && !current.wounded)) return;
-                if (booleans.has(name)) { const next = !!current[name]; if (control.checked !== next) control.checked = next; }
+                if (booleans.has(name)) { const next = booleanValue(current, name); if (control.checked !== next) control.checked = next; }
                 else {
                   const value = displayValue(control, current[name]);
                   if (control.value !== value) control.value = value;
                 }
               });
-              updateResourceWarnings(editor);
+              syncGearRows(editor); updateResourceWarnings(editor);
               if (dirty.size && !saving && canSave() && [...dirty].some(field => !conflicts.has(field))) schedule(200);
             };
             drawEditor(hero, editor, {character:false, attributes:false, gear:false, equipment:false}, true);
@@ -203,7 +216,7 @@
               if (!fields.includes(name) || event.isComposing) return;
               if (!dirty.size || conflicts.size) baseVersion = store.heroVersions?.[id] ?? null;
               conflicts.delete(name); dirty.add(name);
-              syncInjury(editor, heroById(id), dirty); updateResourceWarnings(editor);
+              syncInjury(editor, heroById(id), dirty); syncGearRows(editor); updateResourceWarnings(editor);
               status("Niezapisane zmiany"); schedule();
             };
             editor.addEventListener("input", changed);
@@ -250,8 +263,8 @@
     draftDirty = dirtyFields.size > 0;
     const shadowMin = String(hero.shadowScars);
     if (form.elements.shadow.min !== shadowMin) form.elements.shadow.min = shadowMin;
-    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && form.elements.injury.disabled)) return; if (booleans.has(name)) { const next = !!hero[name]; if (control.checked !== next) control.checked = next; return; } const next = displayValue(control, hero[name]); if (control.value !== next) control.value = next; });
-    updateResourceWarnings(form);
+    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && form.elements.injury.disabled)) return; if (booleans.has(name)) { const next = booleanValue(hero, name); if (control.checked !== next) control.checked = next; return; } const next = displayValue(control, hero[name]); if (control.value !== next) control.value = next; });
+    syncGearRows(form); updateResourceWarnings(form);
   }
   function renderList() {
     const state = store.getState(), ids = new Set(state.heroes.map(hero => hero.id));
@@ -280,7 +293,7 @@
       const actions = el("div", "card-actions"); (isPlayer() ? [["Edytuj arkusz", "edit"]] : [["Edytuj arkusz", "edit"], ["×", "remove"]]).forEach(([label, action]) => { const b = el("button", action === "remove" ? "icon-button" : "text-button", label); b.type = "button"; b.dataset.heroAction = action; b.dataset.id = hero.id; b.title = action === "remove" ? "Usuń ze starcia" : "Edytuj arkusz"; actions.append(b); }); top.append(title, actions); card.append(top);
       const meters = el("div", "combat-stats"); [["WYTRZYMAŁOŚĆ", "endurance", hero.maxEndurance], ["NADZIEJA", "hope", hero.maxHope]].forEach(([label, field, max]) => { const meter = el("div", "meter"), controls = el("div", "adjusters"); meter.append(el("p", "", label), el("strong", "", `${hero[field]}/${max}`)); [-5, -1, 1, 5].forEach(delta => { const b = el("button", "", (delta > 0 ? "+" : "") + delta); b.type = "button"; b.dataset.heroResource = field; b.dataset.change = delta; b.dataset.id = hero.id; controls.append(b); }); meter.append(controls); meters.append(meter); }); card.append(meters);
       card.append(el("p", "detail", `Cień ${hero.shadow} · Obciążenie ${hero.load} · Znużenie ${hero.fatigue} · Obrona ${hero.parry} · Pancerz ${hero.armour}`));
-      const weapons = Array.from({ length: 4 }, (_, i) => { const name = hero[`weapon${i}Name`]; if (!name) return ""; return name + [ ["obrażenia", "Damage"], ["przebicie", "Injury"] ].map(([label, key]) => hero[`weapon${i}${key}`] ? ` · ${label} ${hero[`weapon${i}${key}`]}` : "").join(""); }).filter(Boolean);
+      const weapons = Array.from({ length: 4 }, (_, i) => { const name = hero[`weapon${i}Name`]; if (!name || hero[`weapon${i}Enabled`] === false) return ""; return name + [ ["obrażenia", "Damage"], ["przebicie", "Injury"] ].map(([label, key]) => hero[`weapon${i}${key}`] ? ` · ${label} ${hero[`weapon${i}${key}`]}` : "").join(""); }).filter(Boolean);
       if (weapons.length) card.append(el("p", "detail", `Rynsztunek: ${weapons.join("; ")}`));
       const ratings = [["Łuki", "combatBows"], ["Miecze", "combatSwords"], ["Topory", "combatAxes"], ["Włócznie", "combatSpears"]].filter(([, key]) => hero[key] > 0).map(([label, key]) => `${label} ${hero[key]}`);
       if (ratings.length) card.append(el("p", "detail", `Biegłości: ${ratings.join(" · ")}`));
@@ -302,7 +315,7 @@
     if (!fields.includes(name) || event.isComposing) return;
     if (!draftDirty || conflictFields.size) draftVersion = store.heroVersions?.[editingId] ?? null;
     conflictFields.delete(name); draftDirty = true; dirtyFields.add(name);
-    syncInjury(form, heroById(editingId), dirtyFields); updateResourceWarnings(form);
+    syncInjury(form, heroById(editingId), dirtyFields); syncGearRows(form); updateResourceWarnings(form);
     status("Niezapisane zmiany"); scheduleSave();
   }
   form.addEventListener("input", changedField);

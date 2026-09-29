@@ -80,6 +80,15 @@ The added string fields are `age`, `treasure`, `calling`, `culturalBlessing`,
 `armourLoad`, `helmLoad`, `shieldParry`, and `shieldLoad`. `weary`, `miserable`,
 and `wounded` are booleans.
 
+`weapon0Enabled` through `weapon3Enabled`, `helmEnabled`, and `shieldEnabled`
+are booleans that default to true for new heroes and legacy records. Only explicit
+false disables an item. Disabling preserves its fields; armour is always enabled.
+Changing an enabled flag through `saveHero` subtracts/adds that item's load from
+the hero's current load atomically (minimum zero). Repeating the same flag value
+does not adjust load again. This preserves manual adjustments instead of summing
+all equipment. Explicit `load` updates remain authoritative, and loading/restoring
+records never applies transition deltas. Parry and armour stay manually editable.
+
 The skill fields are `skillAwareness`, `skillSong`, `skillHunting`, `skillAwe`,
 `skillCraft`, `skillAthletics`, `skillInsight`, `skillCourtesy`, `skillHealing`,
 `skillEnhearten`, `skillBattle`, `skillTravel`, `skillScan`, `skillRiddle`,

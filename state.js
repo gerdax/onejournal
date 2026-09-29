@@ -15,6 +15,7 @@
   const TERRAIN_KINDS = new Set(["tree", "shrub", "log", "boulder", "grass", "wall", "rubble", "pillar", "pool", "crystal", "stalagmite"]);
   const HERO_STRINGS = ["name", "culture", "weapons", "proficiencies", "stance", "conditions", "notes", "age", "treasure", "calling", "culturalBlessing", "distinctiveFeatures", "flaws", "patron", "shadowPath", "injury", "rewards", "virtues", "equipment", "standardOfLiving", "armourName", "helmName", "shieldName"];
   const HERO_NUMBERS = ["strength", "heart", "wits", "strengthTN", "heartTN", "witsTN", "endurance", "maxEndurance", "hope", "maxHope", "shadow", "load", "fatigue", "parry", "armour", "shadowScars", "valour", "wisdom", "adventurePoints", "skillPoints", "fellowship", "helmProtection", "armourLoad", "helmLoad", "shieldParry", "shieldLoad"];
+  const HERO_GEAR = ["weapon0", "weapon1", "weapon2", "weapon3", "helm", "shield"];
   const HERO_BOOLEANS = ["weary", "miserable", "wounded"];
   const HERO_SKILLS = ["Awareness", "Song", "Hunting", "Awe", "Craft", "Athletics", "Insight", "Courtesy", "Healing", "Enhearten", "Battle", "Travel", "Scan", "Riddle", "Explore", "Persuade", "Lore", "Stealth"];
   const HERO_COMBAT = ["combatBows", "combatSwords", "combatAxes", "combatSpears"];
@@ -55,6 +56,7 @@
     HERO_NUMBERS.forEach(field => { result[field] = Math.max(0, number(raw[field], 0)); });
     result.shadow = Math.max(result.shadow, result.shadowScars);
     HERO_BOOLEANS.forEach(field => { result[field] = !!raw[field]; });
+    HERO_GEAR.forEach(item => { const field = item + "Enabled"; result[field] = raw[field] !== false; });
     HERO_SKILLS.forEach(name => {
       result["skill" + name] = clamp(Math.trunc(number(raw["skill" + name], 0)), 0, 6);
       result["skill" + name + "Favoured"] = !!raw["skill" + name + "Favoured"];
@@ -178,7 +180,20 @@
       setEnemyWound(pid, index, checked) { return mutate(() => { if (!Number.isInteger(index) || index < 0) throw new RangeError("Invalid enemy wound index"); if (typeof checked !== "boolean") throw new TypeError("Enemy wound value must be boolean"); const e = state.battle.find(x => x.id === pid); if (!e) return; if (index >= e.wounds.length) throw new RangeError("Invalid enemy wound index"); const newlyChecked = checked && !e.wounds[index]; e.wounds[index] = checked; if (newlyChecked && e.wounds.every(Boolean)) e.defeated = true; }); },
       adjustResource(pid, field, delta) { return mutate(() => { const e = state.battle.find(x => x.id === pid); const p = state.heroParticipants.find(x => x.id === pid); const target = e || (p && state.heroes.find(x => x.id === p.heroId)); if (!target) return; const maxima = { endurance: "maxEndurance", hate: "maxHate", hope: "maxHope" }; if (!(field in maxima) || !Number.isFinite(Number(delta)) || !(field in target)) return; target[field] = clamp(number(target[field], 0) + Number(delta), 0, number(target[maxima[field]], 0)); }); },
       reorderEnemies(ids) { return mutate(() => { if (!Array.isArray(ids) || ids.length !== state.battle.length || new Set(ids).size !== ids.length || ids.some(x => !state.battle.some(e => e.id === x))) throw new Error("Invalid enemy order"); state.battle.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)); }); },
-      saveHero(data) { return mutate(() => { const input = Object.assign({}, data); const existing = input.id && state.heroes.find(x => x.id === input.id); if (input.wounded === false || (Object.hasOwn(input, "injury") && !(Object.hasOwn(input, "wounded") ? input.wounded : existing && existing.wounded))) input.injury = ""; const saved = hero(Object.assign({}, existing || {}, input, { id: existing ? existing.id : (input.id || id()) })); const index = state.heroes.findIndex(x => x.id === saved.id); if (index >= 0) state.heroes[index] = saved; else state.heroes.push(saved); return copy(saved); }); },
+      saveHero(data) { return mutate(() => { const input = Object.assign({}, data); const existing = input.id && state.heroes.find(x => x.id === input.id); if (input.wounded === false || (Object.hasOwn(input, "injury") && !(Object.hasOwn(input, "wounded") ? input.wounded : existing && existing.wounded))) input.injury = ""; const saved = hero(Object.assign({}, existing || {}, input, { id: existing ? existing.id : (input.id || id()) }));
+        // Apply transitions once, atomically with the flag. Explicit load edits
+        // remain authoritative, including full-sheet updates and imports.
+        if (existing && !Object.hasOwn(input, "load")) {
+          let delta = 0;
+          HERO_GEAR.forEach(item => {
+            const flag = item + "Enabled";
+            if (!Object.hasOwn(input, flag) || saved[flag] === (existing[flag] !== false)) return;
+            const weight = Math.max(0, number(String(saved[item + "Load"] ?? "").replace(",", "."), 0));
+            delta += saved[flag] ? weight : -weight;
+          });
+          saved.load = Math.max(0, saved.load + delta);
+        }
+        const index = state.heroes.findIndex(x => x.id === saved.id); if (index >= 0) state.heroes[index] = saved; else state.heroes.push(saved); return copy(saved); }); },
       deleteHero(heroId) { return mutate(() => { state.heroes = state.heroes.filter(x => x.id !== heroId); state.heroParticipants = state.heroParticipants.filter(x => x.heroId !== heroId); }); },
       addHero(heroId) { return mutate(() => { if (!state.heroes.some(x => x.id === heroId)) throw new Error("Unknown hero"); const pid = "hero:" + heroId; if (!state.heroParticipants.some(x => x.id === pid)) state.heroParticipants.push({ id: pid, heroId }); return { id: pid, heroId }; }); },
       setMap(raw) { return mutate(() => { state.map = mapShape(raw, participantIds()); if (state.map) state.map.positions = {}; }); },

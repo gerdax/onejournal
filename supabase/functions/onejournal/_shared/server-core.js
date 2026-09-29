@@ -145,10 +145,13 @@ function validateMethodInput(method, args, access, doc, heroVersion) {
     }
     if (method !== "saveHero" || !isObject(args[0]) || args[0].id !== access.heroId || !doc.state.heroes.some(h => h.id === access.heroId)) fail(403, "Brak uprawnień do tej komendy.");
     const assigned = doc.state.heroes.find(h => h.id === access.heroId);
-    if (Object.keys(args[0]).some(key => key !== "id" && (key === "defeated" || !own(assigned, key)))) fail(403, "To pole może zmieniać tylko mistrz gry.");
+    if (Object.keys(args[0]).some(key => key !== "id" && (key === "defeated" || (!own(assigned, key) && !/^(weapon[0-3]|helm|shield)Enabled$/.test(key))))) fail(403, "To pole może zmieniać tylko mistrz gry.");
   }
   if (["addEnemy", "addLibrary"].includes(method) && args[0]?.might != null && (!finiteInt(args[0].might) || args[0].might > 5)) fail(400, "Potęga musi wynosić od 0 do 5.");
   if (method === "saveHero") {
+    for (const [key, value] of Object.entries(args[0] || {})) {
+      if (/^(weapon[0-3]|helm|shield)Enabled$/.test(key) && typeof value !== "boolean") fail(400, "Nieprawidłowy stan rynsztunku.");
+    }
     if (own(args[0] || {}, "avatarId")) {
       const existing = doc.state.heroes.find(h => h.id === args[0].id);
       if ((args[0].avatarId || null) !== (existing?.avatarId || null)) fail(400, "Portret należy zmieniać osobno.");
