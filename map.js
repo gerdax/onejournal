@@ -493,12 +493,11 @@
       const wounds = el('div', 'map-enemy-wounds');
       wounds.setAttribute('role', 'group'); wounds.setAttribute('aria-label', 'Rany przeciwnika');
       wounds.appendChild(el('span', '', 'Rana:'));
-      Array.from({ length: Math.max(4, (person.wounds || []).length) }, (_, index) => {
+      Array.from({ length: (person.wounds || []).length }, (_, index) => {
         const checked = !!person.wounds?.[index];
         const input = el('input'); input.type = 'checkbox'; input.checked = checked;
-        input.disabled = index >= (person.wounds || []).length;
         input.dataset.wound = index;
-        input.setAttribute('aria-label', input.disabled ? `Rana ${index + 1} — niedostępna` : `Rana ${index + 1} z ${person.wounds.length}`);
+        input.setAttribute('aria-label', `Rana ${index + 1} z ${person.wounds.length}`);
         input.addEventListener('change', () => {
           run(() => store.setEnemyWound(person.id, index, input.checked));
           const replacement = panel.querySelector(`[data-wound="${index}"]`);
