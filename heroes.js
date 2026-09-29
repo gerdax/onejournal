@@ -34,6 +34,9 @@
   if (!host || !battleList || !store) return;
   const fields = ["name", "culture", "strength", "heart", "wits", "strengthTN", "heartTN", "witsTN", "endurance", "maxEndurance", "hope", "maxHope", "shadow", "load", "fatigue", "parry", "armour", "weapons", "proficiencies", "stance", "conditions", "notes"];
   const numeric = new Set(["strength", "heart", "wits", "strengthTN", "heartTN", "witsTN", "endurance", "maxEndurance", "hope", "maxHope", "shadow", "load", "fatigue", "parry", "armour"]);
+  const blankZeroGear = new Set(["armour", "armourLoad", "helmProtection", "helmLoad", "shieldParry", "shieldLoad"]);
+  for (let i = 0; i < 4; i++) { blankZeroGear.add(`weapon${i}Damage`); blankZeroGear.add(`weapon${i}Load`); }
+  const blankGearValue = (name, value) => blankZeroGear.has(name) && (value == null || String(value).trim() === "" || Number(value) === 0);
   const skillGroups = [
     [["Awareness", "Czujność"], ["Song", "Pieśni"], ["Hunting", "Polowanie"], ["Awe", "Respekt"], ["Craft", "Rzemiosło"], ["Athletics", "Zwinność"]],
     [["Insight", "Przenikliwość"], ["Courtesy", "Uprzejmość"], ["Healing", "Uzdrawianie"], ["Enhearten", "Inspiracja"], ["Battle", "Wojaczka"], ["Travel", "Wędrówka"]],
@@ -61,7 +64,7 @@
   const list = host.querySelector("#hero-list"), form = host.querySelector("#hero-editor");
 
   function field(label, name, type = "text", extra = "") { return `<label>${label}<input name="${name}" type="${type}" ${extra}></label>`; }
-  const displayValue = (control, value) => value == null || value === "" ? (control.type === "number" ? "0" : "") : String(value);
+  const displayValue = (control, value) => blankGearValue(control.name, value) ? "" : value == null || value === "" ? (control.type === "number" ? "0" : "") : String(value);
   function drawEditor(hero, target = form, preferences = sectionOpen, embedded = false) {
     const form = target, sectionOpen = preferences;
     form.querySelectorAll('[data-sheet-section]').forEach(section => {
@@ -70,7 +73,7 @@
     const value = name => hero && hero[name] != null ? hero[name] : (numeric.has(name) ? 0 : name === "stance" ? "Wyważona" : "");
     const input = name => String(!hero && numeric.has(name) ? 0 : value(name)).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
     const textField = (label, name, cls = "") => `<div class="${cls}">${field(label, name, "text", `maxlength="300" value="${input(name)}"`)}</div>`;
-    const numberField = (label, name) => field(label, name, "number", `min="0" value="${input(name) || 0}"`);
+    const numberField = (label, name) => field(label, name, "number", `min="0" value="${blankGearValue(name, value(name)) ? "" : input(name) || 0}"`);
     const area = (label, name, rows = 3) => `<label>${label}<textarea name="${name}" rows="${rows}" maxlength="4000"></textarea></label>`;
     const check = (label, name) => `<label class="sheet-check"><input type="checkbox" name="${name}" ${value(name) ? "checked" : ""}><span>${label}</span></label>`;
     const rating = (label, name, favoured = false) => `<div class="skill-row">${favoured ? `<input type="checkbox" name="${name}Favoured" aria-label="${label}: umiejętność ulubiona" ${value(name + "Favoured") ? "checked" : ""}>` : ""}<span id="${form.id}-label-${name}">${label}</span><select class="skill-rating" name="${name}" aria-labelledby="${form.id}-label-${name}">${Array.from({length: 7}, (_, n) => `<option value="${n}">${n ? "◆".repeat(n) : "—"}</option>`).join("")}</select></div>`;
@@ -233,8 +236,8 @@
     const form = target;
     for (const name of names) {
       const control = form.elements[name]; if (!control) continue;
-      if (/^(weapon[0-3](Damage|Load)|treasure)$/.test(name) && !control.checkValidity()) { control.reportValidity(); return false; }
-      if (numeric.has(name) && (!control.value.trim() || !Number.isFinite(Number(control.value)) || Number(control.value) < 0)) { control.setCustomValidity("Podaj liczbę równą zero lub większą."); control.reportValidity(); control.setCustomValidity(""); return false; }
+      if ((blankZeroGear.has(name) || name === "treasure") && !control.checkValidity()) { control.reportValidity(); return false; }
+      if (numeric.has(name) && ((!control.value.trim() && !blankZeroGear.has(name)) || (control.value.trim() && (!Number.isFinite(Number(control.value)) || Number(control.value) < 0)))) { control.setCustomValidity("Podaj liczbę równą zero lub większą."); control.reportValidity(); control.setCustomValidity(""); return false; }
       if (name === "name" && !control.value.trim()) { control.setCustomValidity("Podaj imię bohatera."); control.reportValidity(); control.setCustomValidity(""); return false; }
     }
     return true;
