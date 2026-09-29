@@ -3,7 +3,7 @@
 ## Supabase
 
 1. Utwórz pusty projekt PostgreSQL. Włącz Authentication → Sign In / Providers → Allow anonymous sign-ins. Anonimowa sesja nie daje dostępu do gry, dopóki serwer nie sprawdzi prywatnego linku.
-2. Zastosuj wszystkie migracje z `supabase/migrations/` w kolejności nazw (CLI lub MCP). Prywatne tabele nie mają polityk odczytu dla klientów; to zamierzona blokada, nie brak konfiguracji.
+2. Zastosuj wszystkie migracje z `supabase/migrations/` w kolejności nazw (CLI lub MCP), w tym `202609290001_hero_avatars.sql` przed wdrożeniem nowej funkcji i frontendu. Prywatne tabele i zasobnik Storage `onejournal-avatars` nie mają dostępu klienta; funkcja Edge korzysta z service role po sprawdzeniu aktywnego dostępu.
 3. W Edge Functions → Secrets ustaw:
    - `ONEJOURNAL_ENCRYPTION_KEY`: losowe 32 bajty zakodowane base64. Wygeneruj w zaufanym terminalu: `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`.
    - `ONEJOURNAL_ALLOWED_ORIGINS`: rozdzielone przecinkami originy, np. `https://gerdax.github.io,http://localhost:8877,http://127.0.0.1:8877`. Bez końcowego ukośnika ani ścieżki.
@@ -22,6 +22,8 @@ Repozytorium: `gerdax/onejournal`. W Settings → Pages ustaw Source: GitHub Act
 ## Odbiór i utrzymanie
 
 Uruchom izolowane testy z README przed publikacją. Po wdrożeniu sprawdź wejście MG, brak dostępu bez linku, działanie Ustawień i połączenie Realtime. Nie przywracaj próbnych kopii w działającej grze.
+
+Sprawdź też zapis i odczyt portretu jako MG i właściciel bohatera, odmowę po cofnięciu linku oraz eksport kopii v2 z portretami. Test przywracania wykonaj tylko na oddzielnym projekcie. Eksport zawiera obrazy; zachowaj go jako prywatny plik. Zastąpione portrety pozostają w Storage jako niezmienne obiekty, dopóki nie zostanie wdrożone bezpieczne czyszczenie uwzględniające zachowane kopie.
 
 Realtime wysyła tylko numer publicznej rewizji. Każde urządzenie dodatkowo pobiera stan co 5 sekund, co obsługuje prywatne zmiany MG, cofnięcie dostępu i naprawę przerwanej subskrypcji. Cofnięcie dostępu blokuje nowe żądania natychmiast; otwarty widok usuwa dane po otrzymaniu odmowy. Danych już wyświetlonych na odłączonym urządzeniu nie da się zdalnie odebrać.
 

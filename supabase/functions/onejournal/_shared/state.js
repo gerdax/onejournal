@@ -49,6 +49,8 @@
   function hero(raw) {
     if (!object(raw) || typeof raw.name !== "string" || !raw.name.trim()) throw new Error("Bohater musi mieć imię.");
     const result = { id: typeof raw.id === "string" && raw.id ? raw.id : id() };
+    if (raw.avatarId != null && raw.avatarId !== "" && (typeof raw.avatarId !== "string" || !/^[a-f0-9]{64}$/.test(raw.avatarId))) throw new Error("Invalid avatar id");
+    result.avatarId = raw.avatarId || null;
     HERO_STRINGS.forEach(field => { result[field] = raw[field] == null ? (field === "stance" ? "Wyważona" : "") : String(raw[field]); });
     HERO_NUMBERS.forEach(field => { result[field] = Math.max(0, number(raw[field], 0)); });
     result.shadow = Math.max(result.shadow, result.shadowScars);

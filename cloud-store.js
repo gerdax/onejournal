@@ -75,6 +75,11 @@
       markOffline() { if (connection !== 'revoked') { epoch++; connection = 'offline'; emit(); } },
       stop() { epoch++; stopped = true; transport.stop?.(); connection = 'offline'; emit(); },
       exportBackup() { return enqueue({ action: 'export' }); },
+      getAvatar(heroId) { return enqueue({ action: 'avatarGet', heroId }); },
+      setAvatar(heroId, dataUrl, heroVersion) {
+        return enqueue({ action: 'avatarSet', heroId, dataUrl: dataUrl || null,
+          heroVersion: heroVersion ?? snapshot?.heroVersions?.[heroId] ?? 0 }, true).then(response => clone(response.result));
+      },
       listLinks() { return enqueue({ action: 'links' }); },
       rotateLink(heroId) { return enqueue({ action: 'rotateLink', heroId }); },
       revokeLink(heroId) { return enqueue({ action: 'revokeLink', heroId }); },
@@ -83,6 +88,18 @@
     };
     mutations.forEach(method => {
       store[method] = (...args) => {
+        if (method === 'restoreBackup' && args[0]?.format === 'onejournal' && args[0].version === 2) {
+          return (async () => {
+            const backup = clone(args[0]);
+            if (!backup.avatars || typeof backup.avatars !== 'object' || Array.isArray(backup.avatars)) throw new Error('Nieprawidłowy spis portretów.');
+            for (const [id, dataUrl] of Object.entries(backup.avatars)) {
+              const staged = await enqueue({ action: 'avatarStage', dataUrl });
+              if (staged.avatarId !== id) throw new Error('Portret w kopii nie pasuje do identyfikatora.');
+              backup.avatars[id] = null;
+            }
+            return enqueue({ action: 'command', method, args: [backup] }, true).then(response => clone(response.result));
+          })();
+        }
         const body = { action: 'command', method, args: clone(args) };
         if (method === 'saveHero') {
           body.args = [clone(args[0])];

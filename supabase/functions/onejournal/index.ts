@@ -41,9 +41,42 @@ const repository = {
   compareAndSwap: (expected: number, document: object, publicChange: boolean) =>
     rpc("onejournal_cas", { expected_revision: expected, document, notify_public: publicChange })
 };
+const avatarBucket = "onejournal-avatars";
+const avatarStorage = {
+  async get(id: string) {
+    if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("Invalid avatar id");
+    const response = await fetch(`${url}/storage/v1/object/authenticated/${avatarBucket}/${id}.jpg`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      if ([400, 404].includes(response.status) && error?.error === "not_found" && error?.message === "Object not found") return null;
+      throw new Error(`Avatar download failed (${response.status})`);
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > 65536) throw new Error("Avatar exceeds size limit");
+    return `data:image/jpeg;base64,${bytes.toString("base64")}`;
+  },
+  async put(id: string, dataUrl: string) {
+    const previous = await this.get(id);
+    if (previous) {
+      if (previous !== dataUrl) throw new Error("Avatar hash collision");
+      return;
+    }
+    const bytes = Buffer.from(dataUrl.slice(23), "base64");
+    const response = await fetch(`${url}/storage/v1/object/${avatarBucket}/${id}.jpg`, {
+      method: "POST", headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=31536000" },
+      body: bytes
+    });
+    if (!response.ok) {
+      if (await this.get(id) === dataUrl) return;
+      throw new Error(`Avatar upload failed (${response.status}): ${await response.text()}`);
+    }
+  }
+};
 const core = createServerCore({
-  repository, catalog,
-  hashSecret: (secret: string) => createHash("sha256").update(secret).digest("hex"),
+  repository, avatarStorage, catalog,
+  hashSecret: (secret: string | Uint8Array) => createHash("sha256").update(secret).digest("hex"),
   randomSecret: () => randomBytes(32).toString("base64url"), encryptSecret, decryptSecret
 });
 const json = (body: unknown, status: number, headers: HeadersInit) => new Response(JSON.stringify(body), { status, headers: { ...headers, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });

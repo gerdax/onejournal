@@ -10,6 +10,46 @@ const clone = x => JSON.parse(JSON.stringify(x));
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error; };
 const isObject = x => x !== null && typeof x === "object" && !Array.isArray(x);
 const finiteInt = x => Number.isInteger(x) && x >= 0;
+const avatarIds = state => [...new Set((Array.isArray(state?.heroes) ? state.heroes : []).map(h => h?.avatarId).filter(Boolean))];
+function avatarImage(dataUrl, hashSecret) {
+  if (typeof dataUrl !== "string" || dataUrl.length > 23 + 4 * Math.ceil(65536 / 3) || !/^data:image\/jpeg;base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(dataUrl)) fail(400, "Nieprawidłowy obraz portretu.");
+  const encoded = dataUrl.slice(23);
+  let bytes;
+  try { bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0)); } catch { fail(400, "Nieprawidłowy obraz portretu."); }
+  if (bytes.length > 65536 || bytes.length < 32 || bytes[0] !== 255 || bytes[1] !== 216) fail(400, "Portret musi być obrazem JPEG 256 × 256 do 64 KiB.");
+  let pos = 2, width = 0, height = 0, scan = false, ended = false, scanSeen = false, entropy = 0, quantization = false, huffman = false;
+  while (pos < bytes.length) {
+    if (scan) {
+      while (pos < bytes.length && bytes[pos] !== 255) { pos++; entropy++; }
+      if (pos >= bytes.length) break;
+      while (pos < bytes.length && bytes[pos] === 255) pos++;
+      if (pos >= bytes.length) break;
+      if (bytes[pos] === 0 || bytes[pos] >= 208 && bytes[pos] <= 215) { pos++; entropy++; continue; }
+      scan = false;
+    } else {
+      if (bytes[pos++] !== 255) break;
+      while (pos < bytes.length && bytes[pos] === 255) pos++;
+    }
+    const marker = bytes[pos++];
+    if (marker === 217) { ended = pos === bytes.length; break; }
+    if (marker === 216 || marker === 1 || marker >= 208 && marker <= 215 || pos + 2 > bytes.length) break;
+    const length = bytes[pos] * 256 + bytes[pos + 1];
+    if (length < 2 || pos + length > bytes.length) break;
+    if ([192, 193, 194].includes(marker)) {
+      if (length < 11 || width || bytes[pos + 2] !== 8 || length !== 8 + 3 * bytes[pos + 7] || bytes[pos + 7] < 1 || bytes[pos + 7] > 4) break;
+      height = bytes[pos + 3] * 256 + bytes[pos + 4]; width = bytes[pos + 5] * 256 + bytes[pos + 6];
+    } else if (marker >= 195 && marker <= 207 && marker !== 196 && marker !== 200 && marker !== 204) break;
+    if (marker === 219) quantization = true;
+    if (marker === 196) huffman = true;
+    if (marker === 218) {
+      if (!width || length < 8 || length !== 6 + 2 * bytes[pos + 2] || bytes[pos + 2] < 1) break;
+      scan = true; scanSeen = true;
+    }
+    pos += length;
+  }
+  if (!ended || !scanSeen || !entropy || !quantization || !huffman || width !== 256 || height !== 256) fail(400, "Portret musi być poprawnym obrazem JPEG 256 × 256.");
+  return { id: hashSecret(bytes), dataUrl };
+}
 const storageFor = state => {
   let saved = state ? JSON.stringify(state) : null;
   return { getItem: key => key === "one-ring-state" ? saved : null, setItem: (key, value) => { if (key === "one-ring-state") saved = value; } };
@@ -109,13 +149,17 @@ function validateMethodInput(method, args, access, doc, heroVersion) {
   }
   if (["addEnemy", "addLibrary"].includes(method) && args[0]?.might != null && (!finiteInt(args[0].might) || args[0].might > 5)) fail(400, "Potęga musi wynosić od 0 do 5.");
   if (method === "saveHero") {
+    if (own(args[0] || {}, "avatarId")) {
+      const existing = doc.state.heroes.find(h => h.id === args[0].id);
+      if ((args[0].avatarId || null) !== (existing?.avatarId || null)) fail(400, "Portret należy zmieniać osobno.");
+    }
     const id = args[0] && args[0].id;
     if (!isObject(args[0]) || typeof args[0].name !== "string" && !id) fail(400, "Nieprawidłowy bohater.");
     if (id && doc.state.heroes.some(h => h.id === id) && heroVersion !== (doc.heroVersions[id] || 0)) fail(409, "Arkusz bohatera został zmieniony. Zachowaj szkic i odśwież dane.");
   }
   if (method === "restoreBackup" && access.role !== "gm") fail(403, "Brak uprawnień.");
 }
-function createServerCore({ repository, hashSecret, randomSecret, encryptSecret, decryptSecret, catalog = [], now = () => new Date().toISOString() }) {
+function createServerCore({ repository, avatarStorage = { get: async () => null, put: async () => { throw new Error("Avatar storage unavailable"); } }, hashSecret, randomSecret, encryptSecret, decryptSecret, catalog = [], now = () => new Date().toISOString() }) {
   if (!repository || !hashSecret || !randomSecret || !encryptSecret || !decryptSecret) throw new Error("Missing server dependency");
   const project = (doc, access) => {
     const response = snapshot(doc, access);
@@ -128,7 +172,16 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
     if (action === "snapshot") return project(doc, access);
     if (action === "export") {
       if (access.role !== "gm") fail(403, "Brak uprawnień.");
-      return { format: "onejournal", version: 1, state: clone(doc.state), rolls: doc.rolls.map(r => clone(r.entry)) };
+      const avatars = {};
+      for (const id of avatarIds(doc.state)) {
+        const dataUrl = await avatarStorage.get(id);
+        if (!dataUrl || avatarImage(dataUrl, hashSecret).id !== id) fail(500, "Brakuje obrazu portretu.");
+        avatars[id] = dataUrl;
+      }
+      const current = await repository.get();
+      if (accessFor(current, uid).role !== "gm") fail(403, "Brak uprawnień.");
+      if (current.revision !== doc.revision) fail(409, "Stan gry zmienił się. Ponów eksport.");
+      return { format: "onejournal", version: 2, state: clone(doc.state), rolls: doc.rolls.map(r => clone(r.entry)), avatars };
     }
     if (action === "links") {
       if (access.role !== "gm") fail(403, "Brak uprawnień.");
@@ -152,17 +205,40 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
         publicChange = false;
       } else {
         access = accessFor(doc, uid);
-        if (request.action === "command") {
+        if (request.action === "avatarSet") {
+          const hero = doc.state.heroes.find(h => h.id === request.heroId);
+          if (!hero) fail(400, "Nieznany bohater.");
+          if (access.role !== "gm" && access.heroId !== hero.id) fail(403, "Brak uprawnień do bohatera.");
+          if (request.heroVersion !== (doc.heroVersions[hero.id] || 0)) fail(409, "Arkusz bohatera został zmieniony. Zachowaj szkic i odśwież dane.");
+          let avatarId = null;
+          if (request.dataUrl != null && request.dataUrl !== "") {
+            const image = avatarImage(request.dataUrl, hashSecret);
+            avatarId = image.id;
+            await avatarStorage.put(avatarId, image.dataUrl);
+          }
+          hero.avatarId = avatarId;
+          output = clone(hero);
+          doc.heroVersions[hero.id] = (doc.heroVersions[hero.id] || 0) + 1;
+        } else if (request.action === "command") {
           validateMethodInput(request.method, request.args, access, doc, request.heroVersion);
           const oldState = doc.state;
           const args = clone(request.args);
           if (request.method === "restoreBackup" && isObject(args[0]) && args[0].format === "onejournal") {
-            if (args[0].version !== 1 || !Array.isArray(args[0].rolls)) fail(400, "Nieprawidłowa kopia.");
+            if (![1, 2].includes(args[0].version) || !Array.isArray(args[0].rolls)) fail(400, "Nieprawidłowa kopia.");
             const wrapper = args[0];
+            const ids = avatarIds(wrapper.state || { heroes: [] });
+            if (wrapper.version === 2) {
+              if (!isObject(wrapper.avatars) || Object.keys(wrapper.avatars).length !== ids.length || Object.keys(wrapper.avatars).some(id => !ids.includes(id) || wrapper.avatars[id] !== null)) fail(400, "Nieprawidłowy spis portretów.");
+              for (const id of ids) {
+                const dataUrl = await avatarStorage.get(id);
+                if (!dataUrl || avatarImage(dataUrl, hashSecret).id !== id) fail(400, "Brakuje obrazu portretu.");
+              }
+            } else if (ids.length) fail(400, "Brakuje obrazów portretów.");
             args[0] = wrapper.state;
             doc.rolls = restoredRolls(wrapper.rolls, uid);
             doc.rollEpoch = (doc.rollEpoch || 0) + 1;
           }
+          if (request.method === "restoreBackup" && (!isObject(request.args[0]) || request.args[0].format !== "onejournal") && avatarIds(args[0]).length) fail(400, "Brakuje obrazów portretów.");
           if (request.method === "saveHero" && access.role === "gm" && args[0].id && !doc.state.heroes.some(h => h.id === args[0].id)) delete args[0].id;
           try { output = resultOf(request.method, args, doc); }
           catch (error) { fail(400, error.message || "Nieprawidłowa komenda."); }
@@ -254,6 +330,7 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
         if (request.action === "rotateLink") return output;
         const response = project(doc, access);
         if (request.action === "command") response.result = output === undefined ? null : output;
+        if (request.action === "avatarSet") response.result = output;
         return response;
       }
     }
@@ -262,6 +339,28 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
   return { defaultDocument, snapshot, handle(uid, request) {
     if (typeof uid !== "string" || !uid || !isObject(request)) fail(400, "Nieprawidłowe żądanie.");
     if (["snapshot", "export", "links"].includes(request.action)) return read(uid, request.action);
+    if (request.action === "avatarGet" || request.action === "avatarStage") return (async () => {
+      const doc = await repository.get();
+      const access = accessFor(doc, uid);
+      if (request.action === "avatarStage") {
+        if (access.role !== "gm") fail(403, "Brak uprawnień.");
+        const image = avatarImage(request.dataUrl, hashSecret);
+        await avatarStorage.put(image.id, image.dataUrl);
+        return { avatarId: image.id };
+      }
+      const hero = doc.state.heroes.find(h => h.id === request.heroId);
+      if (!hero) fail(400, "Nieznany bohater.");
+      if (access.role !== "gm" && access.heroId !== hero.id) fail(403, "Brak uprawnień do bohatera.");
+      const avatarId = hero.avatarId || null;
+      if (!avatarId) return { avatarId: null, dataUrl: null };
+      const dataUrl = await avatarStorage.get(avatarId);
+      if (!dataUrl || avatarImage(dataUrl, hashSecret).id !== avatarId) fail(500, "Brakuje obrazu portretu.");
+      const current = await repository.get();
+      const currentAccess = accessFor(current, uid);
+      if (currentAccess.role !== "gm" && currentAccess.heroId !== hero.id) fail(403, "Brak uprawnień do bohatera.");
+      if (!current.state.heroes.some(h => h.id === hero.id && h.avatarId === avatarId)) fail(409, "Portret został zmieniony.");
+      return { avatarId, dataUrl };
+    })();
     return mutate(uid, request);
   } };
 }

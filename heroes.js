@@ -78,7 +78,7 @@
     form.innerHTML = `<div class="hero-editor-top"><div class="hero-editor-actions"></div></div>
       <div class="sheet-top">
         <section class="sheet-identity" aria-label="Tożsamość bohatera">
-          <div class="sheet-name-row"><div class="sheet-seal" aria-hidden="true">✧</div>${textField("Imię", "name", "sheet-name")}${textField("Wiek", "age")}${numberField("Skarb", "treasure")}</div>
+          <div class="sheet-name-row"><div class="sheet-avatar-slot"></div>${textField("Imię", "name", "sheet-name")}${textField("Wiek", "age")}${numberField("Skarb", "treasure")}</div>
           <div class="sheet-background">${textField("Rodzima kultura", "culture")}${textField("Powołanie", "calling")}${textField("Rodzima korzyść", "culturalBlessing", "sheet-wide")}${textField("Wyróżniki", "distinctiveFeatures", "sheet-wide")}${textField("Przywary", "flaws", "sheet-wide")}${textField("Patron", "patron")}${textField("Ścieżka Cienia", "shadowPath")}</div>
         </section>
         <section class="sheet-vitals" aria-label="Zasoby i ograniczenia">
@@ -86,7 +86,7 @@
           <div class="sheet-conditions"><h3>Ograniczenia</h3><div class="sheet-pair"><div>${check("Wyczerpanie", "weary")}${check("Przygnębienie", "miserable")}${check("Rana", "wounded")}</div>${textField("Stopień rany", "injury")}</div></div>
         </section>
       </div>
-      <div class="sheet-columns">${attributes.map(([label, key, tn, resource, max], i) => `<section class="sheet-column"><h3>${label}</h3><div class="sheet-attribute">${numberField("Wartość", key)}${numberField("PT", tn)}${numberField(resource, max)}</div><h4>Umiejętności</h4><div class="sheet-skills">${skillGroups[i].map(([key, label]) => rating(label, "skill" + key, true)).join("")}</div><section class="sheet-column-bottom">${i === 0 ? `<h3>Biegłości bojowe</h3>${[["Łuki", "Bows"], ["Miecze", "Swords"], ["Topory", "Axes"], ["Włócznie", "Spears"]].map(([label, key]) => rating(label, "combat" + key)).join("")}` : `<div class="sheet-section-heading"><h3>${i === 1 ? "Nagrody" : "Przymioty"}</h3>${numberField(i === 1 ? "Męstwo" : "Mądrość", i === 1 ? "valour" : "wisdom")}</div>${area(i === 1 ? "Zdobyte nagrody" : "Posiadane przymioty", i === 1 ? "rewards" : "virtues", 4)}`}</section></section>`).join("")}</div>
+      <div class="sheet-columns">${attributes.map(([label, key, tn, resource, max], i) => `<section class="sheet-column"><h3>${label}</h3><div class="sheet-attribute">${numberField("Wartość", key)}${numberField("PT", tn)}${numberField(resource, max)}</div><div class="sheet-skills">${skillGroups[i].map(([key, label]) => rating(label, "skill" + key, true)).join("")}</div><section class="sheet-column-bottom">${i === 0 ? `<h3>Biegłości bojowe</h3>${[["Łuki", "Bows"], ["Miecze", "Swords"], ["Topory", "Axes"], ["Włócznie", "Spears"]].map(([label, key]) => rating(label, "combat" + key)).join("")}` : `<div class="sheet-section-heading"><h3>${i === 1 ? "Nagrody" : "Przymioty"}</h3>${numberField(i === 1 ? "Męstwo" : "Mądrość", i === 1 ? "valour" : "wisdom")}</div>${area(i === 1 ? "Zdobyte nagrody" : "Posiadane przymioty", i === 1 ? "rewards" : "virtues", 4)}`}</section></section>`).join("")}</div>
       <section class="sheet-gear"><h3>Rynsztunek</h3><div class="sheet-gear-grid"><div class="sheet-weapons">${Array.from({length: 4}, (_, i) => `<div class="sheet-weapon-row">${[["Broń", "Name"], ["Obrażenia", "Damage"], ["Przebicie", "Injury"], ["Obciążenie", "Load"], ["Uwagi", "Notes"]].map(([label, key]) => (["Damage", "Load"].includes(key) ? numberField(label, `weapon${i}${key}`) : textField(label, `weapon${i}${key}`))).join("")}</div>`).join("")}</div><div class="sheet-armour">${[["Zbroja", "armourName", "Pancerz (k)", "armour", "armourLoad"], ["Hełm", "helmName", "Pancerz (k)", "helmProtection", "helmLoad"], ["Tarcza", "shieldName", "Obrona", "shieldParry", "shieldLoad"]].map(([label, name, protection, key, load]) => `<div>${textField(label, name)}${numberField(protection, key)}${numberField("Obciążenie", load)}</div>`).join("")}</div></div></section>
       <div class="sheet-bottom"><section><h3>Ekwipunek</h3>${area("Przedmioty i wyposażenie", "equipment", 5)}</section><section class="sheet-progress">${textField("Poziom życia", "standardOfLiving")}<div class="sheet-points">${numberField("Punkty przygody", "adventurePoints")}${numberField("Punkty umiejętności", "skillPoints")}${numberField("Poziom zażyłości", "fellowship")}</div></section></div>
       <details class="sheet-extra sheet-disclosure"><summary>Notatki</summary><div>${area("Notatki bohatera", "notes")}</div></details>
@@ -121,6 +121,7 @@
     updateResourceWarnings(form);
     form.elements.name.required = true;
     form.elements.name.maxLength = 80;
+    if (hero) window.OneRingAvatars?.mount(form.querySelector('.sheet-avatar-slot'), hero.id);
     if (hero && !embedded && !isPlayer()) { const actions = form.querySelector(".hero-editor-actions"), footer = form.querySelector(".hero-editor-footer-actions"), inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); const battle = el("button", "text-button", inBattle ? "Usuń z potyczki" : "Dodaj do potyczki"); battle.type = "button"; battle.dataset.heroAction = "battle"; battle.dataset.id = hero.id;  actions.append(battle); const remove = el("button", "text-button danger", "Usuń bohatera"); remove.type = "button"; remove.dataset.heroAction = "delete"; remove.dataset.id = hero.id; footer.append(remove); }
     if (!embedded) { draftDirty = false; draftVersion = null; dirtyFields.clear(); conflictFields.clear(); }
   }
@@ -217,6 +218,7 @@
             sheet.editor.querySelectorAll('details').forEach(section => { section.open = false; });
             container.replaceChildren(sheet.editor);
           }
+          window.OneRingAvatars?.mount(sheet.editor.querySelector('.sheet-avatar-slot'), id);
         }
       };
     }

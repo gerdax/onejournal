@@ -5,6 +5,12 @@
 body[data-connection="offline"] #connection-status, body[data-connection="revoked"] #connection-status { color: #9b2f20; font-weight: bold; }
 .access-link { margin: 20px 0; padding: 18px; border: 1px solid #cfc6b4; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 10px; }
 .access-link h3 { flex-basis: 100%; margin: 0; }
+.access-link-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; }
+.access-link-heading h3 { flex-basis: auto; }
+.avatar-settings-status { flex-basis: 100%; font-size: 13px; color: #9b2f20; }
+.settings-dialog .connection-settings button.avatar-remove, .settings-dialog .access-link button.avatar-remove { padding: 4px 0; border: 0; border-radius: 0; background: transparent; color: #9b2f20; text-decoration: underline; text-underline-offset: 2px; }
+.connection-settings .avatar-remove { margin-left: auto; }
+.connection-settings .avatar-remove:disabled, .access-link .avatar-remove:disabled { opacity: .55; cursor: default; }
 .access-link input { min-width: 160px; flex: 1; padding: 8px; }
 :is(.journal-dialog, .settings-dialog) { width: min(600px, 94vw); max-height: 85dvh; padding: 20px; background: #f4f0e8; color: #29251f; border: 1px solid #b7aa94; border-radius: 12px; }
 :is(.journal-dialog, .settings-dialog)::backdrop { background: #19171366; }

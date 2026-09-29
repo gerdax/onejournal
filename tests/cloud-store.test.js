@@ -56,3 +56,22 @@ test('response started before offline cannot re-enable editing',async()=>{
   assert.equal(store.canWrite,false);assert.equal(store.heroVersions.h,1);
   await store.refresh();assert.equal(store.canWrite,true);
 });
+
+test('avatar facade carries hero version and stages backup images before restore', async () => {
+  const requests=[];
+  const dataUrl='data:image/jpeg;base64,example';
+  const store=createStore({request:async body=>{
+    requests.push(body);
+    if(body.action==='avatarStage')return {avatarId:'image-id'};
+    if(body.action==='avatarGet')return {avatarId:'image-id',dataUrl};
+    if(body.action==='avatarSet'||body.action==='command')return {...snapshot(2),result:{id:'h',name:'Ala',avatarId:'image-id'}};
+    return snapshot();
+  }});
+  await store.connect();
+  assert.deepEqual(await store.getAvatar('h'),{avatarId:'image-id',dataUrl});
+  await store.setAvatar('h',dataUrl);
+  assert.deepEqual(requests[2],{action:'avatarSet',heroId:'h',dataUrl,heroVersion:1});
+  await store.restoreBackup({format:'onejournal',version:2,state:snapshot().state,rolls:[],avatars:{'image-id':dataUrl}});
+  assert.equal(requests.at(-2).action,'avatarStage');
+  assert.deepEqual(requests.at(-1).args[0].avatars,{'image-id':null});
+});

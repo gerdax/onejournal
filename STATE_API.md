@@ -25,10 +25,23 @@ others, full details for the player's own participating hero. No private enemy
 fields or other hero sheets are sent. Selection follows the GM for every role.
 Public rolls are readable by all active members; enemy rolls only by GM.
 
-Cloud `exportBackup()` resolves to `{format:'onejournal',version:1,state,rolls}`;
-`state` is a version-2 legacy backup. `restoreBackup()` accepts this wrapper or a
-legacy version-2 backup. A wrapper replaces the journal; a legacy import retains
-it. Access links and authentication are not part of a gameplay backup.
+Cloud `exportBackup()` resolves to `{format:'onejournal',version:2,state,rolls,avatars}`;
+`state` is a version-2 legacy backup. `avatars` maps each referenced avatar ID
+to its JPEG data URL, so the export is portable. `restoreBackup()` accepts this
+wrapper, version-1 wrappers, or legacy version-2 state backups. For version 2,
+the cloud store uploads each image in a separate bounded request, then commits
+the state and journal in one command after the server verifies every referenced
+image. A wrapper replaces the journal; a legacy import retains it. Access links
+and authentication are not part of a gameplay backup.
+
+Each hero has `avatarId: string|null`, an immutable SHA-256 content ID; image
+bytes never appear in normal state snapshots or participants. `getAvatar(heroId)`
+resolves to `{avatarId,dataUrl}` (both null when absent). `setAvatar(heroId,
+dataUrl|null,heroVersion?)` resolves to the updated hero after server confirmation
+and applies the returned snapshot. It defaults to the current hero version and
+rejects a stale version with HTTP 409. The browser supplies a 256 × 256 JPEG at
+most 64 KiB; the server checks the JPEG structure and dimensions. `saveHero`
+cannot change an avatar reference; an unchanged value in a full sheet is accepted.
 
 ## Legacy in-memory normalization engine
 
