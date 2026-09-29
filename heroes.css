@@ -72,7 +72,7 @@
 .sheet-weapon-row + .sheet-weapon-row label { font-size: 0; gap: 0; }
 .sheet-armour { padding-left: 18px; border-left: 1px solid #be8171; }
 .sheet-armour > div { display: grid; grid-template-columns: minmax(0, 1fr) 62px 62px; gap: 6px; align-items: end; margin-bottom: 12px; }
-.sheet-armour input[type=number] { font-size: 16px; padding: 7px 2px; }
+.sheet-armour input[type=number], .sheet-weapon-row input[type=number], .sheet-name-row input[name=treasure] { font-size: 16px; padding: 7px 2px; }
 .sheet-bottom { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; border-top: 2px solid #be8171; padding-top: 22px; }
 .sheet-points { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
 .sheet-points label { text-align: center; align-content: end; }

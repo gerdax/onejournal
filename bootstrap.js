@@ -41,7 +41,7 @@
         for (const name of ['opponents']) { const tab = document.querySelector(`[data-tab="${name}"]`); tab.hidden = true; tab.disabled = true; }
       }
       document.getElementById('gm-settings').hidden = store.access.role !== 'gm';
-      for (const src of ['vendor/Sortable.min.js', 'heroes.js?v=oj7', 'map.js?v=oj8', 'app.js?v=oj1', 'dice-rules.js?v=oj1', 'journal.js?v=11', 'dice-engine.js?v=oj1', 'dice-roller.js?v=oj5', 'settings.js?v=3']) await load(src);
+      for (const src of ['vendor/Sortable.min.js', 'heroes.js?v=oj8', 'map.js?v=oj8', 'app.js?v=oj1', 'dice-rules.js?v=oj1', 'journal.js?v=11', 'dice-engine.js?v=oj1', 'dice-roller.js?v=oj5', 'settings.js?v=3']) await load(src);
       started = true; screen.hidden = true; main.hidden = false;
       document.getElementById('journal-open').hidden = false;
       updateConnection();

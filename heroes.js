@@ -61,6 +61,7 @@
   const list = host.querySelector("#hero-list"), form = host.querySelector("#hero-editor");
 
   function field(label, name, type = "text", extra = "") { return `<label>${label}<input name="${name}" type="${type}" ${extra}></label>`; }
+  const displayValue = (control, value) => value == null || value === "" ? (control.type === "number" ? "0" : "") : String(value);
   function drawEditor(hero, target = form, preferences = sectionOpen, embedded = false) {
     const form = target, sectionOpen = preferences;
     form.querySelectorAll('[data-sheet-section]').forEach(section => {
@@ -77,7 +78,7 @@
     form.innerHTML = `<div class="hero-editor-top"><div class="hero-editor-actions"></div></div>
       <div class="sheet-top">
         <section class="sheet-identity" aria-label="Tożsamość bohatera">
-          <div class="sheet-name-row"><div class="sheet-seal" aria-hidden="true">✧</div>${textField("Imię", "name", "sheet-name")}${textField("Wiek", "age")}${textField("Skarb", "treasure")}</div>
+          <div class="sheet-name-row"><div class="sheet-seal" aria-hidden="true">✧</div>${textField("Imię", "name", "sheet-name")}${textField("Wiek", "age")}${numberField("Skarb", "treasure")}</div>
           <div class="sheet-background">${textField("Rodzima kultura", "culture")}${textField("Powołanie", "calling")}${textField("Rodzima korzyść", "culturalBlessing", "sheet-wide")}${textField("Wyróżniki", "distinctiveFeatures", "sheet-wide")}${textField("Przywary", "flaws", "sheet-wide")}${textField("Patron", "patron")}${textField("Ścieżka Cienia", "shadowPath")}</div>
         </section>
         <section class="sheet-vitals" aria-label="Zasoby i ograniczenia">
@@ -113,7 +114,7 @@
       content.before(section);
       section.append(content);
     });
-    fields.forEach(name => { const control = form.elements[name]; if (!control) return; if (booleans.has(name)) control.checked = !!value(name); else control.value = value(name); });
+    fields.forEach(name => { const control = form.elements[name]; if (!control) return; if (booleans.has(name)) control.checked = !!value(name); else control.value = displayValue(control, value(name)); });
     form.elements.shadow.min = String(hero ? hero.shadowScars : 0);
     syncInjury(form, hero);
     updateResourceWarnings(form);
@@ -182,7 +183,7 @@
                 if (!control || dirty.has(name) || (name === "injury" && !current.wounded)) return;
                 if (booleans.has(name)) control.checked = !!current[name];
                 else {
-                  const value = String(current[name] ?? (numeric.has(name) ? 0 : ""));
+                  const value = displayValue(control, current[name]);
                   if (control.value !== value) control.value = value;
                 }
               });
@@ -227,7 +228,7 @@
     const form = target;
     for (const name of names) {
       const control = form.elements[name]; if (!control) continue;
-      if (/^weapon[0-3](Damage|Load)$/.test(name) && !control.checkValidity()) { control.reportValidity(); return false; }
+      if (/^(weapon[0-3](Damage|Load)|treasure)$/.test(name) && !control.checkValidity()) { control.reportValidity(); return false; }
       if (numeric.has(name) && (!control.value.trim() || !Number.isFinite(Number(control.value)) || Number(control.value) < 0)) { control.setCustomValidity("Podaj liczbę równą zero lub większą."); control.reportValidity(); control.setCustomValidity(""); return false; }
       if (name === "name" && !control.value.trim()) { control.setCustomValidity("Podaj imię bohatera."); control.reportValidity(); control.setCustomValidity(""); return false; }
     }
@@ -240,7 +241,7 @@
     syncInjury(form, hero, dirtyFields);
     draftDirty = dirtyFields.size > 0;
     form.elements.shadow.min = String(hero.shadowScars);
-    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && form.elements.injury.disabled)) return; if (booleans.has(name)) { control.checked = !!hero[name]; return; } const next = hero[name] == null ? (numeric.has(name) ? "0" : "") : String(hero[name]); if (control.value !== next) control.value = next; });
+    fields.forEach(name => { const control = form.elements[name]; if (!control || dirtyFields.has(name) || (name === "injury" && form.elements.injury.disabled)) return; if (booleans.has(name)) { control.checked = !!hero[name]; return; } const next = displayValue(control, hero[name]); if (control.value !== next) control.value = next; });
     updateResourceWarnings(form);
   }
   function renderList() {
