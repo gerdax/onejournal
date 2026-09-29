@@ -11,23 +11,24 @@
   const head = el('div', null, 'journal-head'), close = el('button', '×', 'journal-close');
   close.type = 'button'; close.setAttribute('aria-label', 'Zamknij dziennik rzutów'); close.title = 'Zamknij';
   head.append(el('h2', 'Dziennik rzutów'), close);
-  const list = el('div'), notice = el('p'); notice.setAttribute('role', 'status');
-  const body = el('div', null, 'journal-body'); body.append(notice, list);
+  const list = el('div');
+  const body = el('div', null, 'journal-body'); body.append(list);
   let clearing = false;
-  const clear = store.access.role === 'gm' ? el('button', 'Wyczyść dziennik rzutów', 'text-button') : null;
+  const clear = store.access.role === 'gm' ? el('button', 'Wyczyść rzuty', 'text-button') : null;
+  const foot = el('div', null, 'journal-foot');
   if (clear) {
-    clear.type = 'button'; body.prepend(clear);
+    clear.type = 'button'; foot.append(clear);
     clear.onclick = async () => {
       if (clearing || !store.canWrite) return;
       clearing = true; render();
       try {
         await store.clearRolls();
-        notice.textContent = 'Dziennik rzutów został wyczyszczony u wszystkich.';
-      } catch (error) { notice.textContent = 'Nie wyczyszczono dziennika. ' + error.message; }
+
+      } catch (error) { toast('Nie wyczyszczono dziennika. ' + error.message); }
       finally { clearing = false; render(); }
     };
   }
-  dialog.append(head, body); document.body.append(dialog);
+  dialog.append(head, body); if (clear) dialog.append(foot); document.body.append(dialog);
   close.onclick = () => dialog.close();
   document.getElementById('journal-open').onclick = () => { render(); dialog.showModal(); body.scrollTop = 0; };
   function persist() { try { sessionStorage.setItem(pendingKey, JSON.stringify(pending)); } catch (_) {} }
@@ -105,7 +106,7 @@
       outcome.append(el('strong', result.sum, 'journal-total' + (successful ? ' is-success' : '')), document.createTextNode(resultSuffix(result)));
       row.append(outcome); list.append(row);
     }
-    if (!pending.length && !store.rolls.length) list.append(el('p', 'Nie ma jeszcze rzutów.'));
+
   }
   async function publish(id) {
     const entry = pending.find(item => item.id === id);
@@ -113,10 +114,10 @@
     publishing.add(id); render();
     try {
       await store.publishRoll(entry);
-      pending = pending.filter(item => item.id !== id); persist(); notice.textContent = 'Rzut opublikowany.';
+      pending = pending.filter(item => item.id !== id); persist();
       document.dispatchEvent(new CustomEvent('onejournal:roll-published', { detail: id }));
     } catch (error) {
-      notice.textContent = 'Nie opublikowano rzutu. ' + error.message;
+      toast('Nie opublikowano rzutu. ' + error.message);
       throw error;
     } finally { publishing.delete(id); render(); }
   }
@@ -128,7 +129,7 @@
     }
     if (store.access.role === 'player' && !store.getState().heroes.some(h => h.id === heroId)) throw new Error('Brak przypisanego bohatera.');
     if (store.access.role === 'gm') heroId = null;
-    return { id: crypto.randomUUID(), heroId: config.actor === 'hero' ? heroId : null, config: { ...config } };
+    return { id: crypto.randomUUID(), rollEpoch: store.rollEpoch, heroId: config.actor === 'hero' ? heroId : null, config: { ...config } };
   }
   function capture(prepared, raw) {
     const entry = { ...prepared, raw: JSON.parse(JSON.stringify(raw)) };

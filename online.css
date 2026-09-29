@@ -63,3 +63,7 @@ body[data-role="player"] #map > .map-heading { display: none; }
 .tabs.nav-short-label .nav-label-long { display: none; }
 .tabs.nav-short-label .nav-label-short { display: inline; }
 .tabs.nav-short-label > .tab { padding-inline: 2px; }
+
+.journal-dialog { height: 85dvh; }
+.journal-dialog .journal-body { flex: 1; }
+.journal-foot { flex: none; padding: 12px 20px; border-top: 1px solid #cfc6b4; }

@@ -17,10 +17,10 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="overrides.css?v=70" />
-    <link rel="stylesheet" href="heroes.css?v=90" />
-    <link rel="stylesheet" href="map.css?v=74" />
-    <link rel="stylesheet" href="dice-roller.css?v=95" />
-    <link rel="stylesheet" href="online.css?v=19" />
+    <link rel="stylesheet" href="heroes.css?v=91" />
+    <link rel="stylesheet" href="map.css?v=75" />
+    <link rel="stylesheet" href="dice-roller.css?v=96" />
+    <link rel="stylesheet" href="online.css?v=20" />
   </head>
   <body>
     <section id="access-screen" class="access-screen"><h1>onejournal</h1><p id="access-message">Sprawdzanie dostępu do gry…</p><button id="access-retry" type="button" hidden>Spróbuj ponownie</button></section>
@@ -54,7 +54,7 @@
               <label><span>Zajadłość <button type="button" class="help-tooltip" aria-label="Wyjaśnienie Zajadłości" data-tooltip="Określa, jak groźnym przeciwnikiem jest dana istota. Wpływa na niektóre Obrażenia specjalne i Mroczne Atrybuty.">?</button></span><input id="fierceness" type="number" min="1" max="20" /></label>
               <label><span>Wytrzymałość <button type="button" class="help-tooltip" aria-label="Wyjaśnienie Wytrzymałości" data-tooltip="Mierzy odporność na obrażenia i wyczerpanie walką. Gdy spadnie do zera, przeciwnik zostaje wyeliminowany z potyczki.">?</button></span><input id="endurance" type="number" min="1" max="99" /></label>
               <label id="resource-label"><span><span id="resource-name">Nienawiść</span> <button type="button" class="help-tooltip" id="resource-help" aria-label="Wyjaśnienie Nienawiści" data-tooltip="Mierzy wolę walki i zasób do używania specjalnych zdolności. Można wydać 1 punkt, aby dodać 1k do testu; bez punktów przeciwnik ulega Wyczerpaniu.">?</button></span><input id="hate" type="number" min="0" max="99" /></label>
-              <label><span>Potęga <button type="button" class="help-tooltip" aria-label="Wyjaśnienie Potęgi" data-tooltip="Określa, ile Ran potrzeba, aby pozbawić przeciwnika życia, oraz ile ataków może wykonać w jednej rundzie.">?</button></span><input id="might" type="number" min="0" max="10" /></label>
+              <label><span>Potęga <button type="button" class="help-tooltip" aria-label="Wyjaśnienie Potęgi" data-tooltip="Określa, ile Ran potrzeba, aby pozbawić przeciwnika życia, oraz ile ataków może wykonać w jednej rundzie.">?</button></span><input id="might" type="number" min="0" max="5" /></label>
               <label><span>Obrona <button type="button" class="help-tooltip" aria-label="Wyjaśnienie Obrony" data-tooltip="Jej wartość dodaje się do progu Siły Bohatera, który próbuje sięgnąć tego przeciwnika podczas potyczki.">?</button></span><input id="parry" type="number" min="0" max="20" /></label>
               <label><span>Pancerz <button type="button" class="help-tooltip" aria-label="Wyjaśnienie Pancerza" data-tooltip="Po Przełamaniu Obrony Mistrzyni Wiedzy używa tej wartości do testu Pancerza przeciwnika.">?</button></span><input id="armour" type="number" min="0" max="20" /></label>
             </div>
@@ -90,8 +90,8 @@
     <template id="battle-card-template"><article class="battle-card"><div class="card-top"><div><p class="enemy-tier"></p><h3 class="enemy-name"></h3><p class="enemy-kind"></p></div><div class="card-actions"><button class="icon-button clone" title="Dodaj kopię">⊕</button><button class="icon-button remove" title="Usuń ze starcia">×</button></div></div><div class="combat-stats"><div class="meter"><p>WYTRZYMAŁOŚĆ</p><strong class="endurance-display"></strong><div class="adjusters"><button data-stat="endurance" data-change="-5">−5</button><button data-stat="endurance" data-change="-1">−1</button><button data-stat="endurance" data-change="1">+1</button><button data-stat="endurance" data-change="5">+5</button></div></div><div class="meter hate-meter"><p class="resource-display-label">NIENAWIŚĆ</p><strong class="hate-display"></strong><div class="adjusters"><button data-stat="hate" data-change="-1">−1</button><button data-stat="hate" data-change="1">+1</button></div></div></div><div class="facts"><span>Zajadłość <b class="fierceness-display"></b></span><span>Potęga <b class="might-display"></b></span><span>Obrona <b class="parry-display"></b></span><span>Pancerz <b class="armour-display"></b></span></div><p class="attack-display detail"></p><p class="traits-display detail"></p><button class="defeated">Oznacz jako pokonanego</button></article></template>
     <script src="config.js"></script>
     <script src="state.js?v=oj1"></script>
-    <script src="cloud-store.js?v=2"></script>
-    <script src="supabase-adapter.js?v=1"></script>
-    <script src="bootstrap.js?v=14"></script>
+    <script src="cloud-store.js?v=3"></script>
+    <script src="supabase-adapter.js?v=2"></script>
+    <script src="bootstrap.js?v=15"></script>
   </body>
 </html>

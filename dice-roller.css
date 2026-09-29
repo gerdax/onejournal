@@ -5,7 +5,7 @@
   font: 700 14px Manrope, sans-serif; cursor: pointer;
 }
 .dice-launch:focus-visible, .dice-dialog button:focus-visible, .dice-dialog input:focus-visible { outline: 3px solid #d0a15a; outline-offset: 3px; }
-body:has(.map-viewport.is-fullscreen) .dice-launch, body:has(:fullscreen) .dice-launch { display: none; }
+body:has(.map-viewport.is-fullscreen) .dice-launch, body:has(:fullscreen) .dice-launch, body:has(.dice-dialog[open]) .dice-launch { display: none; }
 .dice-dialog { --dice-sheet-max: calc(100dvh - 24px); position: fixed; inset: 0; width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: #3e3025; overflow: hidden; }
 .dice-dialog::backdrop { background: rgb(30 27 24 / 22%); }
 .dice-dialog-layout { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
@@ -14,6 +14,8 @@ body:has(.map-viewport.is-fullscreen) .dice-launch, body:has(:fullscreen) .dice-
 #dice-stage canvas { width: 100%; height: 100%; display: block; }
 .dice-sheet { position: relative; z-index: 1; flex: 0 0 auto; max-height: min(var(--dice-sheet-max), 720px); overflow-y: auto; width: min(680px, calc(100% - 32px)); margin-inline: auto; background: #f5eee1; border-radius: 18px 18px 0 0; box-shadow: 0 -10px 30px #17110c66; padding: 20px 44px max(24px, env(safe-area-inset-bottom)); }
 .dice-sheet-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #d7c5ad; margin-bottom: 16px; }
+.dice-sheet.is-header-only { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.dice-sheet.is-header-only .dice-sheet-head { border-bottom: 0; margin-bottom: 0; }
 .dice-sheet-head h2 { flex: 1; min-width: 0; margin: 0; }
 .dice-close { border: 0; background: transparent; color: #594234; font-size: 31px; line-height: 1; cursor: pointer; }
 .dice-setup, .dice-settings { display: grid; gap: 13px; }

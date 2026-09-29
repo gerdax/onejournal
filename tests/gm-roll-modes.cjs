@@ -106,9 +106,13 @@ async function main() {
     await gm.page.locator('#journal-open').click();
     for (const { page } of [a, b]) {
       await page.locator('#journal-open').click();
-      assert.equal(await page.getByRole('button', { name: 'Wyczyść dziennik rzutów' }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Wyczyść rzuty' }).count(), 0);
     }
-    await gm.page.getByRole('button', { name: 'Wyczyść dziennik rzutów' }).click();
+    const journalHeight = await gm.page.locator('.journal-dialog').evaluate(e => e.getBoundingClientRect().height);
+    const footerTop = await gm.page.locator('.journal-foot').evaluate(e => e.getBoundingClientRect().top);
+    await gm.page.locator('.journal-dialog .journal-body').evaluate(e => e.scrollTop = e.scrollHeight);
+    assert.equal(await gm.page.locator('.journal-foot').evaluate(e => e.getBoundingClientRect().top), footerTop);
+    await gm.page.getByRole('button', { name: 'Wyczyść rzuty' }).click();
     await gm.page.waitForFunction(() => window.OneRingStore.rolls.length === 0);
     for (const { page } of [a, b]) {
       await refresh(page);
@@ -117,6 +121,8 @@ async function main() {
       await page.getByRole('button', { name: 'Zamknij dziennik rzutów' }).click();
     }
     assert.equal(fixture.document.rolls.length, 0);
+    assert.equal(await gm.page.locator('.journal-dialog .journal-body').innerText(), '');
+    assert.equal(await gm.page.locator('.journal-dialog').evaluate(e => e.getBoundingClientRect().height), journalHeight);
     await gm.page.getByRole('button', { name: 'Zamknij dziennik rzutów' }).click();
     console.log('PASS: GM clears all rolls, both players see empty journals and no clear action');
 

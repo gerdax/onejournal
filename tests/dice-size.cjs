@@ -35,6 +35,7 @@ const { chromium } = require('playwright');
       if (width === 390) {
         await page.locator('.dice-again').click();
         await page.locator('.dice-collapse').click();
+        await page.locator('.dice-collapse').click();
         await page.locator('[data-choice="baseDice"] [data-value="6"]').click();
         await page.locator('[data-choice="featMode"] [data-value="favoured"]').click();
         await page.locator('[data-check="hope"]').check();

@@ -3,7 +3,19 @@
 
   const config = { actor: 'hero', baseDice: 0, featMode: 'normal', exhausted: false,
     miserable: false, bonus: 0, hope: false, inspired: false, enemyResource: false, target: '' };
-  let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, collapsed = false;
+  let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, collapseLevel = 0;
+
+  function playerHero() {
+    const store = root.OneRingStore;
+    return store.access.role === 'player'
+      ? store.getState().heroes.find(hero => hero.id === store.access.heroId) || null
+      : null;
+  }
+
+  function setupHeading() {
+    const hero = playerHero();
+    return root.OneRingStore.access.role === 'player' ? hero?.name || 'Bez imienia' : 'Rzut';
+  }
 
   function element(html) {
     const template = document.createElement('template');
@@ -45,7 +57,7 @@
     dialog.querySelector('.dice-close').addEventListener('click', close);
     dialog.querySelector('.dice-collapse').addEventListener('click', () => {
       if (pending) return;
-      collapsed = !collapsed;
+      collapseLevel = (collapseLevel + 1) % 3;
       renderCollapse();
     });
     dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
@@ -74,6 +86,7 @@
     if (!dialog) return;
     const store = root.OneRingStore;
     if (store.access.role === 'player') config.actor = 'hero';
+    if (dialog.dataset.view === 'setup') dialog.querySelector('#dice-heading').textContent = setupHeading();
     setup.querySelector('[data-choice="actor"]').closest('fieldset').hidden = store.access.role === 'player';
     dialog.dataset.actor = config.actor;
     setup.querySelectorAll('[data-choice]').forEach(group => {
@@ -83,6 +96,11 @@
         button.setAttribute('aria-pressed', String(selected));
       });
     });
+    const hero = playerHero();
+    if (store.access.role === 'player' && !(Number(hero?.hope) > 0)) {
+      config.hope = false;
+      config.inspired = false;
+    }
     setup.querySelectorAll('[data-check]').forEach(input => { input.checked = !!config[input.dataset.check]; });
     setup.querySelector('.dice-miserable').inert = config.actor === 'enemy';
     setup.querySelector('.dice-hero-resource').hidden = config.actor === 'enemy';
@@ -91,6 +109,7 @@
     setup.querySelector('[data-target]').value = config.target;
     setup.querySelector('.dice-bonus-value').textContent = `${config.bonus > 0 ? '+' : ''}${config.bonus}k`;
     setup.querySelectorAll('button, input').forEach(control => { control.disabled = !!pending; });
+    setup.querySelector('[data-check="hope"]').disabled = !!pending || (store.access.role === 'player' && !(Number(hero?.hope) > 0));
     setup.querySelector('[data-step="-1"]').disabled = !!pending || config.bonus <= -6;
     setup.querySelector('[data-step="1"]').disabled = !!pending || config.bonus >= 6;
     const pool = root.DiceRules.calculatePool(config);
@@ -114,17 +133,20 @@
 
   function renderCollapse() {
     const settings = setup.querySelector('#dice-settings');
-    settings.hidden = collapsed;
-    setup.classList.toggle('is-compact', collapsed);
+    settings.hidden = collapseLevel !== 0;
+    setup.hidden = dialog.dataset.view !== 'setup' || collapseLevel === 2;
+    resultPanel.hidden = dialog.dataset.view !== 'result' || collapseLevel === 2;
+    setup.classList.toggle('is-compact', collapseLevel === 1);
+    dialog.querySelector('.dice-sheet').classList.toggle('is-header-only', collapseLevel === 2);
     const toggle = dialog.querySelector('.dice-collapse');
     const groups = resultPanel.querySelector('.dice-result-groups');
-    if (groups) groups.hidden = collapsed;
-    resultPanel.classList.toggle('is-compact', collapsed);
-    toggle.setAttribute('aria-controls', setup.hidden ? 'dice-result-details' : 'dice-settings');
+    if (groups) groups.hidden = collapseLevel !== 0;
+    resultPanel.classList.toggle('is-compact', collapseLevel === 1);
+    toggle.setAttribute('aria-controls', dialog.dataset.view === 'result' ? 'dice-result-details' : 'dice-settings');
     toggle.disabled = !!pending;
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-    const details = setup.hidden ? 'szczegóły wyniku' : 'ustawienia rzutu';
-    toggle.setAttribute('aria-label', `${collapsed ? 'Rozwiń' : 'Zwiń'} ${details}`);
+    toggle.setAttribute('aria-expanded', String(collapseLevel === 0));
+    const details = dialog.dataset.view === 'result' ? 'szczegóły wyniku' : 'ustawienia rzutu';
+    toggle.setAttribute('aria-label', `${collapseLevel === 2 ? 'Rozwiń' : 'Zwiń'} ${details}`);
   }
 
   function resizeStage() {
@@ -143,10 +165,18 @@
     mount();
     if (!dialog || dialog.open) return;
     opener = document.activeElement;
-    collapsed = false;
+    collapseLevel = 0;
+    const hero = playerHero();
+    if (hero) {
+      config.exhausted = !!hero.weary;
+      config.miserable = !!hero.miserable;
+      config.hope = false;
+      config.inspired = false;
+    }
+    dialog.dataset.view = 'setup';
     setup.hidden = false;
     resultPanel.hidden = true;
-    dialog.querySelector('#dice-heading').textContent = 'Rzut';
+    dialog.querySelector('#dice-heading').textContent = setupHeading();
     dialog.showModal();
     renderSetup();
     resizeStage();
@@ -224,7 +254,8 @@
     again.addEventListener('click', () => {
       resultPanel.hidden = true;
       setup.hidden = false;
-      dialog.querySelector('#dice-heading').textContent = 'Rzut';
+      dialog.dataset.view = 'setup';
+      dialog.querySelector('#dice-heading').textContent = setupHeading();
       if (root.DiceEngine && typeof root.DiceEngine.clear === 'function') root.DiceEngine.clear();
       renderSetup();
       resizeStage();
@@ -239,6 +270,7 @@
     resultPanel.append(groups, summary, again);
     setup.hidden = true;
     resultPanel.hidden = false;
+    dialog.dataset.view = 'result';
     dialog.querySelector('#dice-heading').textContent = 'Wynik';
     renderCollapse();
     again.focus();
@@ -249,13 +281,18 @@
     if (!root.OneRingStore.canWrite) { showError('Brak połączenia — rzut jest zablokowany.'); return; }
     const targetInput = setup.querySelector('[data-target]');
     if (!targetInput.checkValidity()) {
-      collapsed = false;
+      collapseLevel = 0;
       renderSetup();
       targetInput.reportValidity();
       return;
     }
     config.target = targetInput.value;
     setup.querySelector('.dice-error').hidden = true;
+    if (root.OneRingStore.access.role === 'player' && config.hope && !(Number(playerHero()?.hope) > 0)) {
+      showError('Brak Nadziei — wyłącz jej wydawanie przed rzutem.');
+      renderSetup();
+      return;
+    }
     if (!root.DiceEngine || typeof root.DiceEngine.roll !== 'function') {
       showError('Silnik kości jest niedostępny.');
       return;
