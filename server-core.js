@@ -54,7 +54,7 @@ function snapshot(doc, access) {
   const fullParticipants = createStore(storageFor(doc.state)).getParticipants();
   const participants = gm ? fullParticipants : publicParticipants.map(p =>
     p.type === "hero" && p.heroId === access.heroId ? fullParticipants.find(full => full.id === p.id) : p);
-  return { state, participants, access, revision: gm ? doc.revision : doc.publicRevision, heroVersions: versions, selection: doc.selection, rolls: doc.rolls.filter(r => gm || r.visibility === "public").map(r => clone(r.entry)) };
+  return { state, participants, access, rollEpoch: doc.rollEpoch || 0, revision: gm ? doc.revision : doc.publicRevision, heroVersions: versions, selection: doc.selection, rolls: doc.rolls.filter(r => gm || r.visibility === "public").map(r => clone(r.entry)) };
 }
 function resultOf(method, args, doc) {
   if (method === "selectToken") {
@@ -107,6 +107,7 @@ function validateMethodInput(method, args, access, doc, heroVersion) {
     const assigned = doc.state.heroes.find(h => h.id === access.heroId);
     if (Object.keys(args[0]).some(key => key !== "id" && (key === "defeated" || !own(assigned, key)))) fail(403, "To pole może zmieniać tylko mistrz gry.");
   }
+  if (["addEnemy", "addLibrary"].includes(method) && args[0]?.might != null && (!finiteInt(args[0].might) || args[0].might > 5)) fail(400, "Potęga musi wynosić od 0 do 5.");
   if (method === "saveHero") {
     const id = args[0] && args[0].id;
     if (!isObject(args[0]) || typeof args[0].name !== "string" && !id) fail(400, "Nieprawidłowy bohater.");
@@ -211,6 +212,7 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
         } else if (request.action === "clearRolls") {
           if (access.role !== "gm") fail(403, "Brak uprawnień.");
           doc.rolls = [];
+          doc.rollEpoch = (doc.rollEpoch || 0) + 1;
         } else if (request.action === "roll") {
           if (typeof request.id !== "string" || !/^[\w-]{8,80}$/.test(request.id)) fail(400, "Nieprawidłowe ID rzutu.");
           const config = cleanConfig(request.config);
@@ -229,8 +231,14 @@ function createServerCore({ repository, hashSecret, randomSecret, encryptSecret,
             if (prior.uid !== uid || prior.payload !== payload) fail(409, "ID rzutu jest już użyte.");
             return project(doc, access);
           }
+          if ((request.rollEpoch ?? 0) !== (doc.rollEpoch || 0)) fail(409, "Dziennik został wyczyszczony. Ten rzut nie może zostać opublikowany; przygotuj nowy.");
           if (doc.rolls.length >= MAX_ROLLS) fail(409, "Dziennik osiągnął limit 10 000 rzutów. Wyeksportuj kopię przed dalszą grą.");
           const hero = heroId ? doc.state.heroes.find(h => h.id === heroId) : null;
+          if (access.role === "player" && config.hope) {
+            if (!hero || hero.hope < 1) fail(409, "Brak Nadziei — nie zapisano rzutu ani nie wydano zasobu.");
+            hero.hope -= 1;
+            doc.heroVersions[heroId] = (doc.heroVersions[heroId] || 0) + 1;
+          }
           const createdAt = now();
           const heroName = hero ? hero.name : null;
           const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? "Przeciwnik" : heroName || "Bohater";

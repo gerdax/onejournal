@@ -136,3 +136,13 @@ Cloud store: `clearRolls()` atomically deletes all published public and private 
 Only GM may call it (server-enforced); the returned snapshot updates the caller,
 and a public revision change synchronizes all players. Character and map data stay unchanged.
 Unpublished local rolls are not records in the shared journal.
+
+Player rolls with `config.hope` spend one Hope in the same compare-and-swap as
+the journal insertion, even outside battle; zero Hope returns 409 without a write.
+The hero version increments with the spend. Repeating an existing roll ID does not
+spend again. GM generic rolls never change a hero. New `addEnemy`/`addLibrary`
+writes accept Might only in 0–5; saved data and backup loading are not clamped.
+
+`rollEpoch` is a non-sensitive journal generation counter included in snapshots
+and prepared rolls. Clearing increments it, so retries of cleared rolls cannot
+recreate entries or spend Hope again. No cleared roll contents are retained.

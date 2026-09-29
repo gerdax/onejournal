@@ -53,6 +53,7 @@
       get selection() { return snapshot?.selection || null; },
       get heroVersions() { return clone(snapshot?.heroVersions || {}); },
       get catalog() { return clone(snapshot?.catalog || []); },
+      get rollEpoch() { return snapshot?.rollEpoch || 0; },
       get rolls() { return clone(snapshot?.rolls || []); },
       get loadError() { return null; },
       getState() { return clone(snapshot?.state || empty); },

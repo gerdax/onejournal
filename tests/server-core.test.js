@@ -277,6 +277,40 @@ test('only GM clears all public and private rolls and notifies players without c
   assert.deepEqual((await f.core.handle('p1', { action: 'snapshot' })).rolls, []);
   assert.deepEqual((await f.core.handle('gm', { action: 'export' })).rolls, []);
   await f.core.handle('gm', { action: 'clearRolls' });
-  await f.core.handle('p1', { action: 'roll', id: 'after-clear-roll', heroId: id, config, raw: { feat: [3], success: [] } });
+  await f.core.handle('p1', { action: 'roll', id: 'after-clear-roll', rollEpoch: 2, heroId: id, config, raw: { feat: [3], success: [] } });
   assert.equal(f.doc.rolls.length, 1);
+});
+
+test('player Hope spending is atomic, deduplicated, shared across devices, and independent of battle participation', async () => {
+  const f = fixture();
+  const id = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A', hope: 1, maxHope: 10 }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId: id });
+  for (const uid of ['p1', 'p2']) await f.core.handle(uid, { action: 'exchange', secret: link.secret });
+  const config = { actor: 'hero', baseDice: 0, bonus: 0, featMode: 'normal', hope: true, inspired: false, enemyResource: false, miserable: false, exhausted: false };
+  const request = { action: 'roll', id: 'hope-roll-01', heroId: id, config, raw: { feat: [7], success: [3] } };
+  const version = f.doc.heroVersions[id];
+  const outcomes = await Promise.allSettled([f.core.handle('p1', request), f.core.handle('p2', { ...request, id: 'hope-roll-02' })]);
+  assert.equal(outcomes.filter(x => x.status === 'fulfilled').length, 1);
+  assert.equal(outcomes.find(x => x.status === 'rejected').reason.status, 409);
+  assert.equal(f.doc.state.heroes[0].hope, 0);
+  assert.equal(f.doc.rolls.length, 1);
+  assert.equal(f.doc.heroVersions[id], version + 1);
+  const firstWon = outcomes[0].status === 'fulfilled';
+  await f.core.handle(firstWon ? 'p1' : 'p2', firstWon ? request : { ...request, id: 'hope-roll-02' });
+  assert.equal(f.doc.rolls.length, 1);
+  assert.equal(f.doc.state.heroes[0].hope, 0);
+  await f.core.handle('gm', { action: 'clearRolls' });
+  await assert.rejects(f.core.handle(firstWon ? 'p1' : 'p2', firstWon ? request : { ...request, id: 'hope-roll-02' }), { status: 409 });
+  assert.equal(f.doc.rolls.length, 0);
+  assert.equal(f.doc.state.heroes[0].hope, 0);
+  await f.core.handle('gm', { ...request, id: 'gm-hope-roll', rollEpoch: 1 });
+  assert.equal(f.doc.state.heroes[0].hope, 0);
+});
+
+test('enemy editor writes reject Might above five', async () => {
+  const f = fixture();
+  for (const method of ['addEnemy', 'addLibrary']) {
+    await assert.rejects(f.core.handle('gm', { action: 'command', method, args: [{ name: 'Ork', might: 6 }] }), { status: 400 });
+    await f.core.handle('gm', { action: 'command', method, args: [{ name: 'Ork', might: 5 }] });
+  }
 });
