@@ -35,11 +35,21 @@
       })().finally(() => { refreshing = null; });
       return refreshing;
     }
-    async function request(body) {
-      await authenticate();
+    async function edge(body) {
       return fetchJSON(base + '/functions/v1/onejournal', {
         method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify(body)
       });
+    }
+    async function request(body) {
+      await authenticate();
+      try { return await edge(body); }
+      catch (error) {
+        // A token can expire while a suspended tab resumes or a request is in flight.
+        // Retry authentication once; never interpret a genuine 403 as token expiry.
+        if (error.status !== 401) throw error;
+        await authenticate(true);
+        return edge(body);
+      }
     }
     const topic = 'realtime:onejournal';
     function send(event, payload, channel = topic) {
