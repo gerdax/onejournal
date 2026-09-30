@@ -632,7 +632,7 @@
     offsetY += bounds.top + viewport.clientTop + viewport.clientHeight / 2 - (target.top + target.height / 2);
     transform();
   });
-  viewport.addEventListener('wheel', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (!currentMap || (desktopPointer() && !expanded)) return; event.preventDefault(); const box = viewport.getBoundingClientRect(); const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1); zoomAt(Math.exp(-clamp(pixels, -100, 100) * .0099), event.clientX - box.left, event.clientY - box.top); }, { passive: false });
+  viewport.addEventListener('wheel', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (!currentMap || (desktopPointer() && !expanded && !event.ctrlKey)) return; event.preventDefault(); const box = viewport.getBoundingClientRect(); const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1); zoomAt(Math.exp(-clamp(pixels, -100, 100) * .0099), event.clientX - box.left, event.clientY - box.top); }, { passive: false });
   function restoreTokenDrag() {
     if (gesture && gesture.type === 'token') {
       gesture.node.style.left = gesture.x + 'px';

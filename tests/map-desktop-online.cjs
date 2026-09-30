@@ -38,6 +38,20 @@ const { startFixture } = require('./fixture-server.cjs');
     await page.waitForFunction(before => window.scrollY < before, beforeScroll);
     assert.deepEqual(await view(), embedded, 'embedded desktop wheel scrolls without zooming');
 
+    // Chromium trackpad pinch is delivered as wheel with ctrlKey, like Ctrl+wheel.
+    const pinchPoint = await backgroundPoint();
+    const pinchBefore = await view();
+    const pageBefore = await page.evaluate(() => ({ scroll: scrollY, scale: visualViewport.scale }));
+    await page.mouse.move(pinchPoint.x, pinchPoint.y);
+    await page.keyboard.down('Control');
+    await page.mouse.wheel(0, -40);
+    await page.waitForFunction(zoom => new DOMMatrix(document.querySelector('#map-stage').style.transform).a > zoom, pinchBefore.zoom);
+    await page.mouse.wheel(0, 40);
+    await page.keyboard.up('Control');
+    await page.waitForFunction(zoom => Math.abs(new DOMMatrix(document.querySelector('#map-stage').style.transform).a - zoom) < .00001, pinchBefore.zoom);
+    assert.deepEqual(await page.evaluate(() => ({ scroll: scrollY, scale: visualViewport.scale })), pageBefore, 'pinch zooms the map without scrolling or scaling the page');
+    assert.equal(await button.getAttribute('aria-pressed'), 'false', 'pinch works in embedded view');
+
     const scrollPoint = await backgroundPoint();
     await page.mouse.dblclick(scrollPoint.x, scrollPoint.y, { delay: 60 });
     assert.equal(await button.getAttribute('aria-pressed'), 'true', 'background double click expands');
