@@ -66,9 +66,14 @@ const cleanConfig = config => {
   }
   if (target !== "" && (!finiteInt(target) || target > 100)) fail(400, "Nieprawidłowy PT.");
   for (const key of ["hope", "inspired", "enemyResource", "miserable", "exhausted"]) if (typeof config[key] !== "boolean") fail(400, "Nieprawidłowa konfiguracja rzutu.");
+  if (own(config, "privateRoll") && typeof config.privateRoll !== "boolean") fail(400, "Nieprawidłowa widoczność rzutu.");
   return { actor: config.actor, baseDice: config.baseDice, bonus: config.bonus, featMode: config.featMode, target,
-    hope: config.hope, inspired: config.inspired, enemyResource: config.enemyResource, miserable: config.miserable, exhausted: config.exhausted };
+    hope: config.hope, inspired: config.inspired, enemyResource: config.enemyResource, miserable: config.miserable, exhausted: config.exhausted,
+    ...(own(config, "privateRoll") ? { privateRoll: config.privateRoll } : {}) };
 };
+const rollVisibility = (config, authorRole) => authorRole === "player" ? "public" :
+  config.privateRoll === true ? "private" : config.privateRoll === false ? "public" :
+    config.actor === "hero" ? "public" : "private";
 const defaultDocument = () => ({ state: createStore(storageFor(null)).getState(), revision: 0, publicRevision: 0, heroVersions: {}, selection: null, rolls: [], links: [], grants: [] });
 const publicMap = map => map ? {
   scene: map.scene, size: map.size, seed: map.seed, width: map.width, height: map.height,
@@ -116,6 +121,10 @@ function restoredRolls(raw, uid) {
     if (!isObject(item) || typeof item.id !== "string" || !/^[\w-]{8,80}$/.test(item.id) || seen.has(item.id) || !["gm", "player"].includes(item.authorRole)) fail(400, "Nieprawidłowy dziennik rzutów.");
     seen.add(item.id);
     const config = cleanConfig(item.config);
+    if (item.authorRole === "player" && (config.actor !== "hero" || config.privateRoll === true)) fail(400, "Nieprawidłowa widoczność rzutu gracza.");
+    if (own(item, "visibility") && !["public", "private"].includes(item.visibility)) fail(400, "Nieprawidłowa widoczność rzutu.");
+    const visibility = own(item, "visibility") ? item.visibility : rollVisibility(config, item.authorRole);
+    if (item.authorRole === "player" && visibility !== "public") fail(400, "Nieprawidłowa widoczność rzutu gracza.");
     const heroId = config.actor === "hero" && typeof item.heroId === "string" && item.heroId.length <= 100 ? item.heroId : null;
     if (config.actor === "hero" && item.authorRole === "player" && !heroId) fail(400, "Nieprawidłowy bohater w dzienniku.");
     const historicName = typeof item.heroName === "string" && item.heroName.length <= 200 ? item.heroName :
@@ -126,10 +135,12 @@ function restoredRolls(raw, uid) {
     let result;
     try { result = DiceRules.interpretRoll(config, item.raw); } catch (error) { fail(400, error.message); }
     const rawDice = { feat: item.raw.feat.slice(), success: item.raw.success.slice() };
-    const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? "Przeciwnik" : heroName || "Bohater";
+    const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? "Przeciwnik" :
+      heroName || (item.authorRole === "gm" && typeof item.name === "string" && item.name.length <= 200 ? item.name : null) ||
+      (item.authorRole === "gm" ? "MG" : "Bohater");
     const entry = { id: item.id, heroId, heroName, name, actor: config.actor,
-      authorRole: item.authorRole, config, raw: rawDice, result, createdAt, at: createdAt };
-    return { id: item.id, uid, payload: JSON.stringify({ restored: entry }), visibility: config.actor === "hero" ? "public" : "private", entry };
+      authorRole: item.authorRole, config, visibility, raw: rawDice, result, createdAt, at: createdAt };
+    return { id: item.id, uid, payload: JSON.stringify({ restored: entry }), visibility, entry };
   });
 }
 function validateMethodInput(method, args, access, doc, heroVersion) {
@@ -297,6 +308,7 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
           if (typeof request.id !== "string" || !/^[\w-]{8,80}$/.test(request.id)) fail(400, "Nieprawidłowe ID rzutu.");
           const config = cleanConfig(request.config);
           if (access.role === "player" && (config.actor !== "hero" || request.heroId !== access.heroId)) fail(403, "Brak uprawnień do rzutu.");
+          if (access.role === "player" && config.privateRoll === true) fail(403, "Rzuty graczy są publiczne.");
           if (access.role === "player" && !doc.state.heroes.some(h => h.id === access.heroId)) fail(403, "Brak dostępu do bohatera.");
           const heroId = access.role === "player" ? access.heroId : null;
           let interpretation;
@@ -321,10 +333,11 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
           }
           const createdAt = now();
           const heroName = hero ? hero.name : null;
-          const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? "Przeciwnik" : heroName || "Bohater";
-          const entry = { id: request.id, heroId, heroName, name, actor: config.actor, authorRole: access.role, config, raw: rawDice, result: interpretation, createdAt, at: createdAt };
-          doc.rolls.push({ id: request.id, uid, payload, visibility: config.actor === "hero" ? "public" : "private", entry });
-          publicChange = config.actor === "hero";
+          const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? "Przeciwnik" : heroName || (access.role === "gm" ? "MG" : "Bohater");
+          const visibility = rollVisibility(config, access.role);
+          const entry = { id: request.id, heroId, heroName, name, actor: config.actor, authorRole: access.role, config, visibility, raw: rawDice, result: interpretation, createdAt, at: createdAt };
+          doc.rolls.push({ id: request.id, uid, payload, visibility, entry });
+          publicChange = visibility === "public";
         } else fail(400, "Nieznane działanie.");
       }
       doc.revision = expected + 1;

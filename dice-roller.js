@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
 
-  const config = { actor: 'hero', baseDice: 0, featMode: 'normal', exhausted: false,
+  const config = { actor: 'hero', privateRoll: true, baseDice: 0, featMode: 'normal', exhausted: false,
     miserable: false, bonus: 0, hope: false, inspired: false, enemyResource: false, target: '' };
   let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, headerOnly = false;
   let pressStartedInSheet = false;
@@ -34,7 +34,7 @@
           <div class="dice-sheet-head"><h2><button type="button" class="dice-collapse" aria-label="Zwiń ustawienia rzutu" aria-expanded="true" aria-controls="dice-settings"><span id="dice-heading">Rzut</span><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button></h2><button type="button" class="dice-close" aria-label="Zamknij rzut">×</button></div>
           <div class="dice-setup">
             <div id="dice-settings" class="dice-settings">
-            <fieldset class="dice-field"><legend>Kto rzuca?</legend><div class="dice-options" data-choice="actor"><button type="button" data-value="hero">Bohater</button><button type="button" data-value="npc">NPC</button><button type="button" data-value="enemy">Przeciwnik</button></div></fieldset>
+            <fieldset class="dice-field"><legend>Kto rzuca?</legend><div class="dice-actor-row"><div class="dice-options" data-choice="actor"><button type="button" data-value="hero">MG</button><button type="button" data-value="enemy">Przeciwnik</button></div><label class="dice-private"><input type="checkbox" data-check="privateRoll"> Priv</label></div></fieldset>
             <fieldset class="dice-field"><legend>Kości sukcesu</legend><div class="dice-options dice-counts" data-choice="baseDice"><button type="button" data-value="0">0</button><button type="button" data-value="1">1</button><button type="button" data-value="2">2</button><button type="button" data-value="3">3</button><button type="button" data-value="4">4</button><button type="button" data-value="5">5</button><button type="button" data-value="6">6</button></div></fieldset>
             <fieldset class="dice-field"><legend>Kość działania</legend><div class="dice-options" data-choice="featMode"><button type="button" data-value="weary">Osłabiona</button><button type="button" data-value="normal">Normalna</button><button type="button" data-value="favoured">Wzmocniona</button></div></fieldset>
             <div class="dice-checks"><label><input type="checkbox" data-check="exhausted"> Wyczerpany</label><label class="dice-miserable"><input type="checkbox" data-check="miserable"> Przygnębiony</label></div>
@@ -91,7 +91,7 @@
   function renderSetup() {
     if (!dialog) return;
     const store = root.OneRingStore;
-    if (store.access.role === 'player') config.actor = 'hero';
+    if (store.access.role === 'player') { config.actor = 'hero'; config.privateRoll = false; }
     if (dialog.dataset.view === 'setup') dialog.querySelector('#dice-heading').textContent = setupHeading();
     setup.querySelector('[data-choice="actor"]').closest('fieldset').hidden = store.access.role === 'player';
     dialog.dataset.actor = config.actor;

@@ -39,8 +39,10 @@ async function main() {
   const b = await open('player B', fixture.secrets.players[1]);
   try {
     await gm.page.locator('.dice-launch').click();
-    assert.deepEqual(await gm.page.locator('.dice-dialog [data-choice="actor"] button').allTextContents(), ['Bohater', 'NPC', 'Przeciwnik']);
+    assert.deepEqual(await gm.page.locator('.dice-dialog [data-choice="actor"] button').allTextContents(), ['MG', 'Przeciwnik']);
     assert.equal(await gm.page.locator('.dice-dialog select').count(), 0, 'GM should not choose a hero for a generic roll');
+    assert.equal(await gm.page.locator('.dice-dialog [data-check="privateRoll"]').isChecked(), true);
+    await gm.page.locator('.dice-dialog [data-check="privateRoll"]').uncheck();
     await gm.page.locator('.dice-dialog .dice-close').click();
     await a.page.locator('.dice-launch').click();
     assert.equal(await a.page.locator('.dice-dialog [data-choice="actor"]').isVisible(), false, 'Player actor choice must be hidden');
@@ -52,33 +54,33 @@ async function main() {
     assert.equal(entry.actor, 'hero');
     assert.equal(entry.heroId, null);
     assert.equal(entry.heroName, null);
-    assert.equal(entry.name, 'Bohater');
+    assert.equal(entry.name, 'MG');
     assert.equal(fixture.document.rolls.at(-1).visibility, 'public');
     await refresh(a.page); await refresh(b.page);
     for (const { page } of [a, b]) {
       assert.equal(await page.evaluate(() => window.OneRingStore.rolls.length), 1);
-      assert.match(await page.locator('.journal-toast').textContent(), /Bohater/);
+      assert.match(await page.locator('.journal-toast').textContent(), /MG/);
       await page.locator('.journal-toast').evaluate(node => node.remove());
     }
-    console.log('PASS: GM generic hero is public, has no heroId, and reaches both players');
+    console.log('PASS: GM public roll has no heroId and reaches both players');
 
     await gm.page.locator('.dice-launch').click();
-    await gm.page.locator('.dice-dialog [data-choice="actor"] [data-value="npc"]').click();
+    await gm.page.locator('.dice-dialog [data-check="privateRoll"]').check();
     assert.equal(await gm.page.locator('.dice-dialog .dice-hero-resource').isVisible(), true);
     assert.equal(await gm.page.locator('.dice-dialog .dice-enemy-resource').isVisible(), false);
     await gm.page.locator('.dice-dialog .dice-close').click();
-    await roll(gm.page, 'npc', 2);
+    await roll(gm.page, 'hero', 2);
     entry = fixture.document.rolls.at(-1).entry;
-    assert.equal(entry.actor, 'npc');
+    assert.equal(entry.actor, 'hero');
     assert.equal(entry.heroId, null);
-    assert.equal(entry.name, 'NPC');
+    assert.equal(entry.name, 'MG');
     assert.equal(fixture.document.rolls.at(-1).visibility, 'private');
     await refresh(a.page); await refresh(b.page);
     for (const { page } of [a, b]) {
       assert.equal(await page.evaluate(() => window.OneRingStore.rolls.length), 1);
       assert.equal(await page.locator('.journal-toast').count(), 0);
     }
-    console.log('PASS: NPC uses hero controls and stays private');
+    console.log('PASS: private MG roll uses hero controls and stays private');
 
     await roll(gm.page, 'enemy', 3);
     entry = fixture.document.rolls.at(-1).entry;
@@ -131,7 +133,7 @@ async function main() {
     entry = fixture.document.rolls.at(-1).entry;
     assert.equal(entry.actor, 'hero');
     assert.equal(entry.heroId, null);
-    assert.equal(entry.name, 'Bohater');
+    assert.equal(entry.name, 'MG');
     console.log('PASS: GM generic hero roll works with an empty hero list');
     assert.deepEqual(errors, []);
   } finally { await gm.context.close(); await a.context.close(); await b.context.close(); }

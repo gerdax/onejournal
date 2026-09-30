@@ -23,7 +23,18 @@ Player snapshots have empty library/battle arrays and only the assigned hero.
 `getParticipants()` is independent of those arrays: public token fields for
 others, full details for the player's own participating hero. No private enemy
 fields or other hero sheets are sent. Selection follows the GM for every role.
-Public rolls are readable by all active members; enemy rolls only by GM.
+Public rolls are readable by all active members; private rolls only by GM.
+GM rolls may set the optional boolean `config.privateRoll` independently of actor:
+`true` stores a private roll, `false` stores a public roll. Without that field,
+legacy visibility applies: GM hero rolls are public and NPC/enemy rolls private.
+Player rolls are always public; the server rejects `privateRoll: true` from a player.
+New generic GM hero rolls are named `MG`; enemy rolls are named `Przeciwnik`.
+Each new journal entry includes `visibility: 'public'|'private'`; older entries
+without it use the same legacy actor rule in the journal UI. The stored roll
+wrapper controls filtering in player snapshots. Only public rolls advance the
+public revision. Backups retain both `config.privateRoll` when present and each
+entry's visibility; restore derives visibility for older backups without it and
+keeps historical hero names.
 
 Cloud `exportBackup()` resolves to `{format:'onejournal',version:2,state,rolls,avatars}`;
 `state` is a version-2 legacy backup. `avatars` maps each referenced avatar ID

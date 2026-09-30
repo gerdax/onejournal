@@ -26,6 +26,10 @@ body:has(.dice-dialog[open]) .dice-launch { display: none; }
 .dice-field { padding: 0; margin: 0; border: 0; min-width: 0; }
 .dice-field legend, .dice-bonus > span, .dice-target { margin-bottom: 6px; font: 700 12px Manrope, sans-serif; color: #594234; }
 .dice-options { display: flex; gap: 5px; flex-wrap: wrap; }
+.dice-actor-row { display: flex; align-items: center; gap: 12px; }
+.dice-actor-row .dice-options { flex: 1; min-width: 0; }
+.dice-private { display: inline-flex; align-items: center; gap: 5px; flex: none; color: #493a2d; font: 600 12px Manrope, sans-serif; cursor: pointer; }
+.dice-private input { width: 16px; height: 16px; margin: 0; accent-color: #60483a; }
 .dice-options button { flex: 1 1 auto; min-height: 38px; padding: 7px 10px; border: 1px solid #bca78d; border-radius: 7px; background: #fffaf1; color: #3e3025; font: 700 12px Manrope, sans-serif; cursor: pointer; }
 .dice-options button[aria-pressed="true"] { background: #584438; color: #fff7e9; border-color: #584438; }
 .dice-counts { flex-wrap: nowrap; }

@@ -49,12 +49,20 @@
     if (result.automaticSuccess) return 'automatyczny sukces';
     return result.passed === true ? 'sukces' : result.passed === false ? 'porażka' : 'bez PT';
   }
-  function title(entry) { return (entry.authorRole === 'gm' && entry.actor === 'hero' && entry.heroId ? 'MG za ' : '') + (entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Wróg · prywatny rzut MG' : 'Bohater')); }
+  function isPrivate(entry) {
+    if (entry.visibility != null) return entry.visibility === 'private';
+    if (typeof entry.config?.privateRoll === 'boolean') return entry.config.privateRoll;
+    return entry.actor === 'npc' || entry.actor === 'enemy';
+  }
+  function title(entry) {
+    const name = entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Przeciwnik' : entry.actor === 'npc' ? 'NPC' : 'Bohater');
+    return (entry.authorRole === 'gm' && entry.actor === 'hero' && entry.heroId ? 'MG za ' : '') + name + (isPrivate(entry) ? ' (Priv)' : '');
+  }
   function resultSuffix(result) {
     const interpretation = verdict(result);
     return `${result.target == null ? '' : '/' + result.target}${interpretation === 'bez PT' ? '' : ' — ' + interpretation} · znaki sukcesu: ${result.marks}`;
   }
-  function summary(entry) { return `${entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Wróg · prywatny rzut MG' : 'Bohater')}: ${entry.result.sum}${resultSuffix(entry.result)}`; }
+  function summary(entry) { return `${title(entry)}: ${entry.result.sum}${resultSuffix(entry.result)}`; }
   function toast(text) {
     document.querySelector('.journal-toast')?.remove(); clearTimeout(toastTimer);
     const node = el('div', text, 'journal-toast'); node.setAttribute('role', 'status'); document.body.append(node);
