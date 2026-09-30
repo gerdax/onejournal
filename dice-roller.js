@@ -253,6 +253,11 @@
       verdict.setAttribute('aria-label', `${outcome.selectedFeatLabel} · automatyczny sukces`);
       verdict.append(featSymbol(outcome.selectedFeat), ' · AUTOMATYCZNY SUKCES');
       summary.append(verdict);
+    } else if (outcome.target !== null) {
+      const verdict = element('<p class="dice-verdict"></p>');
+      verdict.textContent = outcome.passed ? 'SUKCES' : 'PORAŻKA';
+      verdict.classList.toggle('is-failure', !outcome.passed);
+      summary.append(verdict);
     }
     const again = element('<button type="button" class="dice-again">Przygotuj kolejny rzut</button>');
     again.addEventListener('click', () => {

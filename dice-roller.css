@@ -77,6 +77,7 @@ body:has(.dice-dialog[open]) .dice-launch { display: none; }
 .dice-total-value.is-threshold-met { color: #a84637; }
 .dice-verdict { display: flex; align-items: center; gap: 5px; }
 .dice-result-summary .dice-verdict, .dice-result-summary .dice-special { color: #a84637; font-weight: 800; text-transform: uppercase; }
+.dice-result-summary .dice-verdict.is-failure { color: #5a4435; }
 @media (max-width: 520px) { .dice-sheet { width: calc(100% - 16px); padding-inline: 18px; max-height: var(--dice-sheet-max); } .dice-result-groups { grid-template-columns: minmax(105px, max-content) minmax(0, 1fr); gap: 14px; } .dice-options button { padding-inline: 5px; } }
 @media (max-width: 360px) { .dice-result-groups { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: no-preference) { .dice-dialog[open] .dice-sheet { animation: dice-sheet-in .2s ease-out; } @keyframes dice-sheet-in { from { transform: translateY(24px); opacity: .7; } to { transform: translateY(0); opacity: 1; } } }
