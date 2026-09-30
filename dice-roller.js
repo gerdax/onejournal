@@ -80,6 +80,9 @@
       const step = event.target.closest('[data-step]');
       if (step) { config.bonus = Math.max(-6, Math.min(6, config.bonus + Number(step.dataset.step))); renderSetup(); }
     });
+    setup.addEventListener('input', event => {
+      if (event.target.matches('[data-target]')) config.target = event.target.value;
+    });
     setup.addEventListener('change', event => {
       if (event.target.dataset.check) { config[event.target.dataset.check] = event.target.checked; renderSetup(); }
       if (event.target.matches('[data-target]')) { config.target = event.target.value; renderSetup(); }
@@ -112,7 +115,7 @@
     setup.querySelector('.dice-hero-resource').hidden = config.actor === 'enemy';
     setup.querySelector('.dice-enemy-resource').hidden = config.actor !== 'enemy';
     setup.querySelector('.dice-inspired').hidden = config.actor === 'enemy' || !config.hope;
-    setup.querySelector('[data-target]').value = config.target;
+    // PT is a local input draft: snapshots must not overwrite typing or partial numbers.
     setup.querySelector('.dice-bonus-value').textContent = `${config.bonus > 0 ? '+' : ''}${config.bonus}k`;
     setup.querySelectorAll('button, input').forEach(control => { control.disabled = !!pending; });
     setup.querySelector('[data-check="hope"]').disabled = !!pending || (store.access.role === 'player' && !(Number(hero?.hope) > 0));

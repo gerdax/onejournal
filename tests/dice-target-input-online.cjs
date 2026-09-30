@@ -1,0 +1,43 @@
+'use strict';
+const assert = require('node:assert/strict');
+const { chromium } = require('playwright');
+const { startFixture } = require('./fixture-server.cjs');
+(async () => {
+  const fixture = await startFixture();
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+    const page = await browser.newPage();
+    await page.goto(fixture.url + '/#access=' + fixture.secrets.gm);
+    await page.waitForFunction(() => window.OneRingStore?.connection === 'online');
+    await page.locator('.dice-launch').click();
+    const target = page.locator('[data-target]');
+    const refresh = () => page.evaluate(() => OneRingStore.refresh());
+    await target.focus();
+    await page.keyboard.type('3');
+    await refresh();
+    assert.equal(await target.inputValue(), '3', 'snapshot refresh must preserve an uncommitted first digit');
+    await page.keyboard.type('3');
+    assert.equal(await target.inputValue(), '33');
+    await refresh();
+    assert.equal(await target.inputValue(), '33');
+    await target.fill('');
+    await refresh();
+    assert.equal(await target.inputValue(), '', 'cleared optional PT remains empty');
+    await page.keyboard.type('3e');
+    assert.equal(await target.evaluate(node => node.validity.badInput), true);
+    await refresh();
+    assert.equal(await target.evaluate(node => node.validity.badInput), true, 'refresh must not erase incomplete numeric input');
+    await target.fill('33');
+    await page.locator('[data-choice="baseDice"] [data-value="1"]').click();
+    assert.equal(await target.inputValue(), '33', 'other setup changes preserve PT');
+    await page.locator('.dice-close').click();
+    await page.locator('.dice-launch').click();
+    assert.equal(await target.inputValue(), '33', 'reopening preserves PT');
+    await page.evaluate(() => { window.DiceEngine = { clear() {}, roll: async () => ({ feat: [7], success: [4] }) }; });
+    await page.locator('.dice-roll').click();
+    await page.locator('.dice-result:not([hidden])').waitFor();
+    assert.equal(await page.locator('.dice-total').textContent(), 'Suma: 11/33');
+    console.log('PASS: PT typing, clearing, incomplete numeric draft, setup changes and final roll survive refresh');
+  } finally { if (browser) await browser.close(); await fixture.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
