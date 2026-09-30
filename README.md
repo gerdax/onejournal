@@ -9,6 +9,7 @@ MG i gracze otwierają indywidualne linki `#access=…`. Link jest kluczem dost�
 - **MG:** Drużyna, Przeciwnicy, Mapa, Ustawienia. Tworzenie, kopiowanie i unieważnianie linków w Ustawieniach. Nowy link odwołuje stare sesje.
 - **Gracz:** własny arkusz i mapa. Edytuje swój arkusz, widzi żetony i wspólne zaznaczenie MG. Nie przesuwa żetonów ani nie widzi cudzych arkuszy i statystyk przeciwników.
 - **Rzuty:** animacja 3D u rzucającego, powiadomienie i historia u pozostałych. MG wybiera ogólny rzut Bohatera (wspólny), NPC lub Przeciwnika (oba prywatne). NPC używa zasad Bohatera. Tylko gracz rzuca pod imieniem własnej postaci. Nie odejmują zasobów automatycznie. Wynik oczekujący na publikację można ponowić w Dzienniku bez nowego losowania.
+- **Notatnik MG:** pióro obok dziennika otwiera prywatny dokument z formatowaniem i automatycznym zapisem. Kopiowanie obejmuje całą treść, kosz wymaga potwierdzenia. Konflikt między kartami zachowuje szkic i pozwala wybrać wersję serwera lub świadomie zastąpić ją własną. Przy braku sieci szkic pozostaje w pamięci karty, a edycja jest wstrzymana.
 - **Brak internetu:** ostatni widok zostaje; zapisy i nowe rzuty są zablokowane. Szkic wpisany w arkuszu pozostaje w otwartej karcie i można go ponowić po odzyskaniu połączenia. Zamknięcie karty może utracić niezapisany szkic.
 - **Awatar:** kliknij kwadrat przy imieniu i wybierz kwadratowy JPG, PNG lub WebP do 10 MB i 25 megapikseli. Obraz zostanie zmniejszony do miniatury 256 × 256 px. Kolejne kliknięcie pozwala go zastąpić; link „Usuń awatar” znajduje się w Ustawieniach (u MG przy danym bohaterze). Gracz może zmieniać tylko swój awatar. Wgrywanie i usuwanie wymaga połączenia.
 
@@ -26,13 +27,14 @@ Frontend lokalny: `python3 -m http.server 8877`, adres `http://localhost:8877/`.
 - `node --check <zmieniony-plik.js>` — składnia.
 - `NODE_PATH=<katalog-node_modules> node tests/online.cjs` — izolowany serwer w pamięci i osobne przeglądarki MG/dwóch graczy.
 - `NODE_PATH=<katalog-node_modules> node tests/avatar-online.cjs` — wgrywanie, walidacja, synchronizacja i usuwanie awatarów oraz układ mobilny na izolowanych danych.
+- `NODE_PATH=<katalog-node_modules> node tests/notebook-online.cjs` — notatnik MG, formatowanie, schowek, zapis, konflikty, utrata sieci i układ mobilny na izolowanych danych.
 - `NODE_PATH=<katalog-node_modules> node tests/dice-online.cjs` — rzeczywisty rzut WebGL oraz ponowienie publikacji po awarii sieci.
 
 Testy przeglądarkowe wymagają Playwright i Chrome. `CHROME_PATH` nadpisuje domyślną ścieżkę macOS. Pozostałe odziedziczone skrypty `.cjs` opisują lokalny interfejs bestiary i nie są testami online; nie uruchamiaj ich na produkcji.
 
 ## Dane i migracja
 
-W Ustawieniach MG można eksportować pełną grę do JSON (`format: onejournal`, wersja 2), w tym dziennik i obrazy awatarów. Import obsługuje również starsze kopie onejournal w wersji 1 oraz kopie bestiary w wersji 2. Import zastępuje dane wspólnej gry; nie scala ich. Kopia onejournal odtwarza dziennik, import starej kopii bez dziennika zachowuje istniejący dziennik. Usunięcie bohatera przez przywrócenie kopii odbiera jego dostęp. Eksport nie zawiera sekretów ani sesji.
+W Ustawieniach MG można eksportować pełną grę do JSON (`format: onejournal`, wersja 2), w tym dziennik, prywatny notatnik MG i obrazy awatarów. Import obsługuje również starsze kopie onejournal w wersji 1 oraz kopie bestiary w wersji 2. Import zastępuje dane wspólnej gry; nie scala ich. Kopia onejournal odtwarza dziennik, import starej kopii bez dziennika zachowuje istniejący dziennik. Usunięcie bohatera przez przywrócenie kopii odbiera jego dostęp. Starsza kopia bez notatnika zachowuje bieżący notatnik; kopia z pustym notatnikiem go czyści. Eksport nie zawiera sekretów ani sesji.
 
 onejournal nie odczytuje `localStorage` bestiary. Import danych jest jawny i nigdy nie usuwa starego zapisu. Przy publikacji obu aplikacji pod `gerdax.github.io` mają wspólny origin: nowy service worker czyści tylko własny cache, ale stary worker bestiary może usuwać cache innych aplikacji przy swojej aktywacji. Pełną izolację daje osobny origin. Nie otwieraj starych i nowych linków w tej samej karcie bez zakończenia sesji.
 

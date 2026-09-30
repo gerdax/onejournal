@@ -75,3 +75,23 @@ test('avatar facade carries hero version and stages backup images before restore
   assert.equal(requests.at(-2).action,'avatarStage');
   assert.deepEqual(requests.at(-1).args[0].avatars,{'image-id':null});
 });
+
+test('GM notebook getter is detached and save carries version with returned result', async () => {
+  const requests = [];
+  const document = { blocks: [{ type: 'paragraph', runs: [{ text: 'MG' }] }] };
+  const gm = revision => ({ ...snapshot(revision), access: { role: 'gm', heroId: null }, notebook: { document, version: revision } });
+  const store = createStore({ request: async body => {
+    requests.push(body);
+    if (body.action === 'notebookSave') return { ...gm(2), result: { document, version: 2 } };
+    return gm(1);
+  } });
+  await store.connect();
+  store.notebook.document.blocks[0].runs[0].text = 'changed';
+  assert.equal(store.notebook.document.blocks[0].runs[0].text, 'MG');
+  assert.deepEqual(await store.saveNotebook(document), { document, version: 2 });
+  assert.deepEqual(requests[1], { action: 'notebookSave', document, version: 1 });
+  assert.equal(store.notebook.version, 2);
+  const player = createStore({ request: async () => ({ ...snapshot(), notebook: { document, version: 99 } }) });
+  await player.connect();
+  assert.equal(player.notebook, null);
+});

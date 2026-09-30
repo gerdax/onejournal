@@ -55,6 +55,7 @@
       get catalog() { return clone(snapshot?.catalog || []); },
       get rollEpoch() { return snapshot?.rollEpoch || 0; },
       get rolls() { return clone(snapshot?.rolls || []); },
+      get notebook() { return snapshot?.access?.role === 'gm' ? clone(snapshot.notebook || null) : null; },
       get loadError() { return null; },
       getState() { return clone(snapshot?.state || empty); },
       getParticipants() { return clone(snapshot?.participants || []); },
@@ -84,6 +85,10 @@
       rotateLink(heroId) { return enqueue({ action: 'rotateLink', heroId }); },
       revokeLink(heroId) { return enqueue({ action: 'revokeLink', heroId }); },
       clearRolls() { return enqueue({ action: 'clearRolls' }, true); },
+      saveNotebook(document, version) {
+        return enqueue({ action: 'notebookSave', document: clone(document), version: version ?? snapshot?.notebook?.version ?? 0 }, true)
+          .then(response => clone(response.result));
+      },
       publishRoll(entry) { return enqueue({ action: 'roll', ...clone(entry) }, true); }
     };
     mutations.forEach(method => {

@@ -1,7 +1,7 @@
 /* Portable, dependency-injected Onejournal command processor. */
 "use strict";
 
-const { createStore } = typeof require === "function" ? require("./state.js") : globalThis.OneRingState;
+const { createStore, normalizeNotebook } = typeof require === "function" ? require("./state.js") : globalThis.OneRingState;
 const DiceRules = typeof require === "function" ? require("./dice-rules.js") : globalThis.DiceRules;
 const MAX_ROLLS = 10000;
 const GM_METHODS = new Set(["addEnemy", "removeParticipant", "clearBattle", "clearEncounter", "toggleDefeated", "setEnemyWound", "adjustResource", "reorderEnemies", "addLibrary", "removeLibrary", "importLibrary", "saveHero", "deleteHero", "addHero", "setMap", "moveToken", "restoreBackup", "selectToken"]);
@@ -74,7 +74,7 @@ const cleanConfig = config => {
 const rollVisibility = (config, authorRole) => authorRole === "player" ? "public" :
   config.privateRoll === true ? "private" : config.privateRoll === false ? "public" :
     config.actor === "hero" ? "public" : "private";
-const defaultDocument = () => ({ state: createStore(storageFor(null)).getState(), revision: 0, publicRevision: 0, heroVersions: {}, selection: null, rolls: [], links: [], grants: [] });
+const defaultDocument = () => ({ state: createStore(storageFor(null)).getState(), revision: 0, publicRevision: 0, heroVersions: {}, selection: null, rolls: [], links: [], grants: [], notebook: { blocks: [] }, notebookVersion: 0 });
 const publicMap = map => map ? {
   scene: map.scene, size: map.size, seed: map.seed, width: map.width, height: map.height,
   terrain: map.terrain.map(t => ({ kind: t.kind, x: t.x, y: t.y, r: t.r, rotation: t.rotation, variant: t.variant })),
@@ -99,7 +99,7 @@ function snapshot(doc, access) {
   const fullParticipants = createStore(storageFor(doc.state)).getParticipants();
   const participants = gm ? fullParticipants : publicParticipants.map(p =>
     p.type === "hero" && p.heroId === access.heroId ? fullParticipants.find(full => full.id === p.id) : p);
-  return { state, participants, access, rollEpoch: doc.rollEpoch || 0, revision: gm ? doc.revision : doc.publicRevision, heroVersions: versions, selection: doc.selection, rolls: doc.rolls.filter(r => gm || r.visibility === "public").map(r => clone(r.entry)) };
+  return { state, participants, access, rollEpoch: doc.rollEpoch || 0, revision: gm ? doc.revision : doc.publicRevision, heroVersions: versions, selection: doc.selection, rolls: doc.rolls.filter(r => gm || r.visibility === "public").map(r => clone(r.entry)), ...(gm ? { notebook: { document: clone(doc.notebook || { blocks: [] }), version: doc.notebookVersion || 0 } } : {}) };
 }
 function resultOf(method, args, doc) {
   if (method === "selectToken") {
@@ -194,8 +194,8 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
       }
       const current = await repository.get();
       if (accessFor(current, uid).role !== "gm") fail(403, "Brak uprawnień.");
-      if (current.revision !== doc.revision) fail(409, "Stan gry zmienił się. Ponów eksport.");
-      return { format: "onejournal", version: 2, state: clone(doc.state), rolls: doc.rolls.map(r => clone(r.entry)), avatars };
+      if (current.revision !== doc.revision || current.notebookVersion !== doc.notebookVersion) fail(409, "Stan gry zmienił się. Ponów eksport.");
+      return { format: "onejournal", version: 2, state: clone(doc.state), rolls: doc.rolls.map(r => clone(r.entry)), avatars, notebook: clone(doc.notebook || { blocks: [] }) };
     }
     if (action === "links") {
       if (access.role !== "gm") fail(403, "Brak uprawnień.");
@@ -204,6 +204,34 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
     fail(400, "Nieznane działanie.");
   }
   async function mutate(uid, request) {
+    if (request.action === "notebookSave") {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const doc = await repository.get();
+        const expected = doc.revision;
+        if (accessFor(doc, uid).role !== "gm") fail(403, "Brak uprawnień.");
+        if (!finiteInt(request.version)) fail(400, "Nieprawidłowa wersja notatnika.");
+        let document;
+        try { document = normalizeNotebook(request.document); } catch (error) { fail(400, error.message); }
+        const version = doc.notebookVersion || 0;
+        if (request.version !== version) {
+          if (request.version === version - 1 && JSON.stringify(document) === JSON.stringify(doc.notebook || { blocks: [] })) {
+            const response = project(doc, { role: "gm", heroId: null });
+            response.result = { document: clone(doc.notebook), version };
+            return response;
+          }
+          fail(409, "Notatnik został zmieniony. Odśwież dane przed zapisem.");
+        }
+        doc.notebook = document;
+        doc.notebookVersion = version + 1;
+        doc.revision = expected + 1;
+        if (await repository.compareAndSwap(expected, doc, false)) {
+          const response = project(doc, { role: "gm", heroId: null });
+          response.result = { document: clone(document), version: doc.notebookVersion };
+          return response;
+        }
+      }
+      fail(409, "Notatnik został zmieniony. Odśwież dane przed zapisem.");
+    }
     for (let attempt = 0; attempt < 5; attempt++) {
       const doc = await repository.get();
       const expected = doc.revision;
@@ -251,6 +279,10 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
             args[0] = wrapper.state;
             doc.rolls = restoredRolls(wrapper.rolls, uid);
             doc.rollEpoch = (doc.rollEpoch || 0) + 1;
+            if (wrapper.version === 2 && Object.hasOwn(wrapper, "notebook")) {
+              try { doc.notebook = normalizeNotebook(wrapper.notebook); } catch (error) { fail(400, error.message); }
+              doc.notebookVersion = (doc.notebookVersion || 0) + 1;
+            }
           }
           if (request.method === "restoreBackup" && (!isObject(request.args[0]) || request.args[0].format !== "onejournal") && avatarIds(args[0]).length) fail(400, "Brakuje obrazów portretów.");
           if (request.method === "saveHero" && access.role === "gm" && args[0].id && !doc.state.heroes.some(h => h.id === args[0].id)) delete args[0].id;

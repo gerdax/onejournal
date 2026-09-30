@@ -15,6 +15,16 @@ the editor retains its draft until the user explicitly retries.
 
 Additional properties: `access: {role: 'gm'|'player', heroId}`, `connection`,
 `canWrite`, `heroVersions`, `selection`, `catalog` (GM only), and `rolls`.
+`notebook` is `{document,version}` for the GM and `null` for players. Its
+document is `{blocks:[...]}`: paragraph blocks have `runs`, and `bulletList` or
+`orderedList` blocks have `items` containing run arrays. Each run has `text`
+and optional `bold`, `italic`, or `underline` fields set to `true`. The empty
+document is `{blocks:[]}`. Reads are detached. `saveNotebook(document, version?)`
+uses an independent notebook version (defaulting to the current snapshot),
+returns the saved `{document,version}`, and rejects stale edits with HTTP 409.
+Notebook saves advance the GM revision without advancing the public revision;
+player snapshots omit notebook data. `OneRingState.normalizeNotebook` validates
+and canonicalizes documents, rejecting malformed or oversized content.
 Additional methods: `connect(secret?)`, `refresh()`, `markOffline()`, `stop()`,
 `selectToken(id)`, `listLinks()`, `rotateLink(heroId)`, `revokeLink(heroId)`,
 `publishRoll({id,heroId,config,raw})`. Offline mutations reject without sending.
@@ -37,13 +47,17 @@ entry's visibility; restore derives visibility for older backups without it and
 keeps historical hero names.
 
 Cloud `exportBackup()` resolves to `{format:'onejournal',version:2,state,rolls,avatars}`;
+exports also include `notebook` as a document, without its version.
 `state` is a version-2 legacy backup. `avatars` maps each referenced avatar ID
 to its JPEG data URL, so the export is portable. `restoreBackup()` accepts this
 wrapper, version-1 wrappers, or legacy version-2 state backups. For version 2,
 the cloud store uploads each image in a separate bounded request, then commits
 the state and journal in one command after the server verifies every referenced
 image. A wrapper replaces the journal; a legacy import retains it. Access links
-and authentication are not part of a gameplay backup.
+and authentication are not part of a gameplay backup. An omitted `notebook`
+preserves current notes on restore; an explicitly present `{blocks:[]}` clears
+them. A present notebook is validated and advances its version as part of the
+atomic restore. Older wrappers and legacy state backups preserve current notes.
 
 Each hero has `avatarId: string|null`, an immutable SHA-256 content ID; image
 bytes never appear in normal state snapshots or participants. `getAvatar(heroId)`

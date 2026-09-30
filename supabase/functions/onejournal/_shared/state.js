@@ -26,6 +26,43 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const blank = () => ({ version: 2, library: [], battle: [], heroes: [], heroParticipants: [], map: null });
 
+  // The notebook is separate from the shared game state. Validate before any
+  // write so malformed rich text cannot silently disappear during projection.
+  function normalizeNotebook(raw) {
+    const invalid = () => { throw new Error("Nieprawidłowy notatnik MG."); };
+    if (!object(raw) || !Array.isArray(raw.blocks) || raw.blocks.length > 1000) invalid();
+    let entries = 0, characters = 0;
+    const runs = value => {
+      if (!Array.isArray(value)) invalid();
+      entries += value.length;
+      if (entries > 5000) invalid();
+      return value.map(run => {
+        if (!object(run) || typeof run.text !== "string" || run.text.length > 10000) invalid();
+        characters += run.text.length;
+        if (characters > 100000) invalid();
+        const cleaned = { text: run.text };
+        for (const key of ["bold", "italic", "underline"]) {
+          if (Object.hasOwn(run, key)) {
+            if (run[key] !== true) invalid();
+            cleaned[key] = true;
+          }
+        }
+        return cleaned;
+      });
+    };
+    const blocks = raw.blocks.map(block => {
+      if (!object(block)) invalid();
+      if (block.type === "paragraph") return { type: "paragraph", runs: runs(block.runs) };
+      if (block.type !== "bulletList" && block.type !== "orderedList" || !Array.isArray(block.items)) invalid();
+      entries += block.items.length;
+      if (entries > 5000) invalid();
+      return { type: block.type, items: block.items.map(runs) };
+    });
+    const result = { blocks };
+    if (new TextEncoder().encode(JSON.stringify(result)).length > 256 * 1024) invalid();
+    return result;
+  }
+
   function enemy(raw, battleEntry) {
     if (!object(raw) || typeof raw.name !== "string" || !raw.name.trim()) throw new Error("Przeciwnik musi mieć nazwę.");
     const kind = raw.kind || "Bestia";
@@ -205,5 +242,5 @@
       restoreBackup(data) { const checked = validate(data), previous = state, previousError = loadError; try { state = checked; loadError = null; commit(); } catch (error) { state = previous; loadError = previousError; throw error; } }
     };
   }
-  return { createStore };
+  return { createStore, normalizeNotebook };
 });

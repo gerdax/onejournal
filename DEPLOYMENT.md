@@ -3,7 +3,7 @@
 ## Supabase
 
 1. Utwórz pusty projekt PostgreSQL. Włącz Authentication → Sign In / Providers → Allow anonymous sign-ins. Anonimowa sesja nie daje dostępu do gry, dopóki serwer nie sprawdzi prywatnego linku.
-2. Zastosuj wszystkie migracje z `supabase/migrations/` w kolejności nazw (CLI lub MCP), w tym `202609290001_hero_avatars.sql` przed wdrożeniem nowej funkcji i frontendu. Prywatne tabele i zasobnik Storage `onejournal-avatars` nie mają dostępu klienta; funkcja Edge korzysta z service role po sprawdzeniu aktywnego dostępu.
+2. Zastosuj wszystkie migracje z `supabase/migrations/` w kolejności nazw (CLI lub MCP), w tym `202609290001_hero_avatars.sql` i `202609300001_notebook.sql` przed wdrożeniem nowej funkcji i frontendu. Prywatne tabele i zasobnik Storage `onejournal-avatars` nie mają dostępu klienta; funkcja Edge korzysta z service role po sprawdzeniu aktywnego dostępu.
 3. W Edge Functions → Secrets ustaw:
    - `ONEJOURNAL_ENCRYPTION_KEY`: losowe 32 bajty zakodowane base64. Wygeneruj w zaufanym terminalu: `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`.
    - `ONEJOURNAL_ALLOWED_ORIGINS`: rozdzielone przecinkami originy, np. `https://gerdax.github.io,http://localhost:8877,http://127.0.0.1:8877`. Bez końcowego ukośnika ani ścieżki.
@@ -12,6 +12,8 @@
 6. Link MG ma postać `https://<adres-aplikacji>/#access=<sekret>`. MG tworzy bohaterów/importuje kopię, następnie generuje linki w Ustawieniach.
 
 Po rotacji klucza szyfrowania trzeba ponownie zaszyfrować wszystkie linki lub wygenerować je od nowa. Zachowaj klucz w osobnej bezpiecznej kopii; sam eksport JSON go nie zawiera.
+
+Aktualizacja notatnika wymaga kolejności: migracja `202609300001_notebook.sql`, `node scripts/admin-build.mjs` i wdrożenie Edge Function, następnie publikacja frontendu. Migracja dodaje prywatną treść i wersję notatnika; nie zmienia istniejących arkuszy, mapy ani rzutów.
 
 ## GitHub Pages
 
