@@ -564,6 +564,9 @@
   doc.getElementById('map-fit').addEventListener('click', fit);
   const fullscreenButton = doc.getElementById('map-fullscreen');
   let expanded = false, savedOverflow = '', inactiveSiblings = [];
+  const desktopPointer = () => root.navigator.maxTouchPoints === 0 && root.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const mapBackground = node => node === viewport || node === stage || node === terrainSvg || terrainSvg.contains(node);
+  let desktopPress = null, lastBackgroundClick = false, backgroundDoubleClick = false;
   function placeDiceOverlay() {
     const target = doc.fullscreenElement || (expanded ? viewport : doc.body);
     for (const node of doc.querySelectorAll('.dice-launch, .dice-dialog')) {
@@ -578,6 +581,7 @@
   doc.addEventListener('fullscreenchange', placeDiceOverlay);
   function setExpanded(value) {
     if (expanded === value) return;
+    desktopPress = null; lastBackgroundClick = false; backgroundDoubleClick = false;
     restoreTokenDrag(); touchPoints.clear(); touchGesture = null; touchLocked = false;
     expanded = value;
     viewport.classList.toggle('is-fullscreen', value);
@@ -628,7 +632,7 @@
     offsetY += bounds.top + viewport.clientTop + viewport.clientHeight / 2 - (target.top + target.height / 2);
     transform();
   });
-  viewport.addEventListener('wheel', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (!currentMap) return; event.preventDefault(); const box = viewport.getBoundingClientRect(); const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1); zoomAt(Math.exp(-clamp(pixels, -100, 100) * .0099), event.clientX - box.left, event.clientY - box.top); }, { passive: false });
+  viewport.addEventListener('wheel', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (!currentMap || (desktopPointer() && !expanded)) return; event.preventDefault(); const box = viewport.getBoundingClientRect(); const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1); zoomAt(Math.exp(-clamp(pixels, -100, 100) * .0099), event.clientX - box.left, event.clientY - box.top); }, { passive: false });
   function restoreTokenDrag() {
     if (gesture && gesture.type === 'token') {
       gesture.node.style.left = gesture.x + 'px';
@@ -650,6 +654,11 @@
     touchGesture = { ids: [a[0], b[0]], distance: Math.max(1, Math.hypot(a[1].x - b[1].x, a[1].y - b[1].y)), zoom, mapX: (midpointX - offsetX) / zoom, mapY: (midpointY - offsetY) / zoom };
   }
   viewport.addEventListener('pointerdown', event => {
+    if (desktopPointer()) {
+      desktopPress = event.button === 0 && event.pointerType === 'mouse' && currentMap ? { id: event.pointerId, x: event.clientX, y: event.clientY, background: mapBackground(event.target), moved: false } : null;
+      if (!desktopPress || !desktopPress.background) lastBackgroundClick = false;
+      backgroundDoubleClick = false;
+    }
     if (event.button !== 0) return;
     if (event.target.closest('.map-zoom-controls, .dice-launch, .dice-dialog')) {
       if (event.pointerType === 'touch' && !touchPoints.size) suppressTouchClick = false;
@@ -678,6 +687,7 @@
     viewport.setPointerCapture(event.pointerId); event.preventDefault();
   });
   viewport.addEventListener('pointermove', event => {
+    if (desktopPress && desktopPress.id === event.pointerId && Math.hypot(event.clientX - desktopPress.x, event.clientY - desktopPress.y) > 5) desktopPress.moved = true;
     if (event.pointerType === 'touch' && touchPoints.has(event.pointerId)) {
       touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (touchGesture && currentMap) {
@@ -698,6 +708,14 @@
     else { const x = clamp(Math.round(gesture.x + (event.clientX - gesture.startX) / zoom), 0, currentMap.width - 1), y = clamp(Math.round(gesture.y + (event.clientY - gesture.startY) / zoom), 0, currentMap.height - 1); gesture.node.style.left = clamp(x, 30, currentMap.width - 30) + 'px'; gesture.node.style.top = clamp(y, 30, currentMap.height - 30) + 'px'; gesture.nextX = x; gesture.nextY = y; }
   });
   function finishGesture(event) {
+    if (desktopPress && event.pointerId === desktopPress.id) {
+      const press = desktopPress; desktopPress = null;
+      const background = event.type === 'pointerup' && press.background && !press.moved && Math.hypot(event.clientX - press.x, event.clientY - press.y) <= 5 && mapBackground(doc.elementFromPoint(event.clientX, event.clientY));
+      if (background) {
+        backgroundDoubleClick = lastBackgroundClick;
+        lastBackgroundClick = true;
+      } else { lastBackgroundClick = false; backgroundDoubleClick = false; }
+    }
     if (event.pointerType === 'touch' && touchPoints.has(event.pointerId)) {
       touchPoints.delete(event.pointerId);
       if (touchLocked) {
@@ -713,6 +731,11 @@
   }
   function restoreTokenNode(done) { done.node.style.left = done.x + 'px'; done.node.style.top = done.y + 'px'; }
   viewport.addEventListener('pointerup', finishGesture); viewport.addEventListener('pointercancel', finishGesture); viewport.addEventListener('lostpointercapture', finishGesture);
+  viewport.addEventListener('dblclick', event => {
+    if (!desktopPointer() || event.button !== 0 || !backgroundDoubleClick) return;
+    backgroundDoubleClick = false; lastBackgroundClick = false;
+    setExpanded(!expanded);
+  });
   viewport.addEventListener('click', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (suppressTouchClick && event.pointerType === 'touch') { event.preventDefault(); event.stopPropagation(); } }, true);
   tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker || isPlayer()) return; selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
   tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(marker.dataset.id); const pos = currentMap.positions[selected], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(selected, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
