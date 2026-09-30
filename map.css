@@ -73,6 +73,7 @@
 .map-panel-remove { margin-top: 16px; padding-top: 17px; border-width: 1px 0 0; border-color: var(--clay); color: var(--clay); }
 .map-panel.is-defeated > :not(.map-panel-action):not(.map-panel-remove) { filter: grayscale(1); opacity: .55; }
 .map-enemy-wounds { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 18px 0; color: var(--clay); font: 600 14px Georgia, serif; }
+.map-panel-conditions + .map-enemy-wounds { border-top: 1px solid var(--clay); padding-top: 16px; }
 .map-enemy-wounds input { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; padding: 0; accent-color: var(--clay); cursor: pointer; }
 .map-hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 @media (max-width: 760px) { .map-layout { grid-template-columns: 1fr; } .map-viewport { min-height: 360px; height: min(70vw, 510px); } .map-panel { min-height: 130px; } .map-toolbar { align-items: end; } .map-heading-note { display: none; } }
