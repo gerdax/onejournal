@@ -407,7 +407,6 @@
   const enemyNotesBody = el('p', 'map-panel-detail');
   enemyNotes.append(el('summary', '', 'Notatki'), enemyNotesBody);
   enemySheet.appendChild(enemyNotes);
-  let detailEnemyId = null;
   const lastSelectedByType = { hero: null, enemy: null };
   function renderPanel(participants) {
     doc.getElementById('map-center').disabled = !currentMap || !participants.some(person => person.id === selected);
@@ -507,8 +506,6 @@
         wounds.appendChild(input);
       });
       panel.appendChild(wounds);
-      if (detailEnemyId !== person.id) { enemyDetails.open = false; enemyNotes.open = false; }
-      detailEnemyId = person.id;
       enemySheet.hidden = false; enemyDetails.hidden = false; enemyNotes.hidden = !String(person.notes || '').trim();
       enemyNotesBody.textContent = person.notes || 'Brak notatek.';
       enemyDetailBody.replaceChildren();

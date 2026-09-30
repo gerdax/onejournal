@@ -39,7 +39,7 @@ const { chromium } = require('playwright');
     assert.deepEqual((await enemy()).wounds,[true,true]);
     assert.equal((await enemy()).defeated,false);
     await select(ids[1]);
-    assert.equal(await details.evaluate(node=>node.open),false);
+    assert.equal(await details.evaluate(node=>node.open),true);
     assert.equal(await wounds.nth(0).isChecked(),false);
     await select(ids[0]);
     await page.reload();

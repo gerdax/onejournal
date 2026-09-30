@@ -147,16 +147,20 @@
     if (injury.disabled !== disabled) injury.disabled = disabled;
     if (disabled) { if (injury.value !== "") injury.value = ""; if (dirty) dirty.delete("injury"); }
   }
-  // Each cached sheet keeps its draft; disclosures reset when selection changes.
+  // Each cached sheet keeps its draft; disclosures follow the current map panel view.
   // The same renderer serves both views; only saved fields go through the shared store.
   let embeddedSheetSequence = 0;
   window.OneRingHeroSheet = {
     getResourceWarnings,
     mount(container) {
       const sheets = new Map();
+      let disclosureOpen = [false, false, false, false, false];
+      const disclosures = editor => editor.querySelectorAll('details.sheet-disclosure');
       store.subscribe(() => { for (const sheet of sheets.values()) sheet.sync(); });
       return {
         show(id) {
+          const visibleEditor = container.firstElementChild;
+          if (visibleEditor) disclosureOpen = Array.from(disclosures(visibleEditor), section => section.open);
           for (const [key] of sheets) if (!heroById(key)) sheets.delete(key);
           const hero = id && heroById(id);
           container.hidden = !hero;
@@ -231,7 +235,7 @@
           }
           sheet.sync();
           if (container.firstElementChild !== sheet.editor) {
-            sheet.editor.querySelectorAll('details').forEach(section => { section.open = false; });
+            disclosures(sheet.editor).forEach((section, index) => { section.open = disclosureOpen[index]; });
             container.replaceChildren(sheet.editor);
           }
           window.OneRingAvatars?.mount(sheet.editor.querySelector('.sheet-avatar-slot'), id);
