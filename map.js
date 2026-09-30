@@ -470,7 +470,7 @@
     const warnings = person.type === 'hero' ? root.OneRingHeroSheet.getResourceWarnings(person) : {};
     const resources = el('div', 'map-resources'); addAdjuster(resources, person.id, 'endurance', person.endurance, person.maxEndurance, 'Wytrzymałość', !!warnings.endurance);
     if (person.type === 'hero') addAdjuster(resources, person.id, 'hope', person.hope, person.maxHope, 'Nadzieja', !!warnings.hope);
-    else addAdjuster(resources, person.id, 'hate', person.hate, person.maxHate, person.resourceType === 'determination' ? 'Determinacja' : 'Nienawiść');
+    else addAdjuster(resources, person.id, 'hate', person.hate, person.maxHate, person.resourceType === 'determination' ? 'Determinacja' : 'Nienawiść', person.hate === 0 && !person.weary);
     panel.appendChild(resources);
     const facts = el('div', 'map-panel-facts map-panel-hero-facts');
     const factValues = person.type === 'hero' ? [['Obrona', person.parry], ['Pancerz', person.armour], ['Obciąż.', person.load], ['Cień', person.shadow]] : [['Zajadł.', person.fierceness], ['Potęga', person.might], ['Obrona', person.parry], ['Pancerz', person.armour]];
@@ -490,6 +490,19 @@
       injury.addEventListener('compositionend', () => saveHeroField(person, injury, 'injury', injury.value));
       injuryLabel.appendChild(injury); panel.append(conditions, injuryLabel);
     } else {
+      const conditions = el('div', 'map-panel-conditions');
+      const wrapper = el('label'), weary = el('input');
+      weary.type = 'checkbox'; weary.name = 'weary'; weary.checked = !!person.weary;
+      weary.disabled = !canSave();
+      weary.addEventListener('change', async () => {
+        const checked = weary.checked;
+        weary.disabled = true;
+        const saved = await run(() => store.setEnemyWeary(person.id, checked));
+        if (!saved) { weary.checked = !!person.weary; weary.disabled = !canSave(); }
+        if (selected === person.id) panel.querySelector('[name="weary"]')?.focus();
+      });
+      wrapper.append(weary, el('span', person.weary && person.hate > 0 ? 'is-resource-warning' : '', 'Wyczerpany'));
+      conditions.appendChild(wrapper); panel.appendChild(conditions);
       const wounds = el('div', 'map-enemy-wounds');
       wounds.setAttribute('role', 'group'); wounds.setAttribute('aria-label', 'Rany przeciwnika');
       wounds.appendChild(el('span', '', 'Rana:'));
@@ -753,5 +766,7 @@
     renderPanel(participants);
     run(() => store.selectToken(id)).then(ok => { if (pendingSelection !== id) return; pendingSelection = null; if (!ok) { selected = viewSelection(); if (currentMap) renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); } });
   }
-  root.OneRingMap = { generateTerrain, fit, selectParticipant };
+  root.OneRingMap = { generateTerrain, fit, selectParticipant,
+    getSelectedParticipant: () => store.getParticipants().find(person => person.id === (pendingSelection || selected)) || null
+  };
 })(typeof window !== 'undefined' ? window : null);

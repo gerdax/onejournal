@@ -27,7 +27,7 @@ player snapshots omit notebook data. `OneRingState.normalizeNotebook` validates
 and canonicalizes documents, rejecting malformed or oversized content.
 Additional methods: `connect(secret?)`, `refresh()`, `markOffline()`, `stop()`,
 `selectToken(id)`, `listLinks()`, `rotateLink(heroId)`, `revokeLink(heroId)`,
-`publishRoll({id,heroId,config,raw})`. Offline mutations reject without sending.
+`publishRoll({id,heroId,enemyId?,config,raw})`. Offline mutations reject without sending.
 
 Player snapshots have empty library/battle arrays and only the assigned hero.
 `getParticipants()` is independent of those arrays: public token fields for
@@ -38,7 +38,14 @@ GM rolls may set the optional boolean `config.privateRoll` independently of acto
 `true` stores a private roll, `false` stores a public roll. Without that field,
 legacy visibility applies: GM hero rolls are public and NPC/enemy rolls private.
 Player rolls are always public; the server rejects `privateRoll: true` from a player.
-New generic GM hero rolls are named `MG`; enemy rolls are named `Przeciwnik`.
+New generic GM hero rolls are named `MG`; generic enemy rolls are named `Przeciwnik`.
+An optional top-level `enemyId` binds a GM enemy roll to an existing battle enemy.
+The server stores that enemy's current name and ID in the journal entry; backup
+restore keeps both even after the enemy is removed. A bound roll with
+`config.enemyResource: true` spends one `hate` (Nienawiść or Determinacja) atomically
+with journal insertion. Zero resource or a missing enemy rejects without a write.
+Identical retries spend nothing further; the binding participates in the
+idempotency key. Generic rolls without `enemyId` retain their existing behavior.
 Each new journal entry includes `visibility: 'public'|'private'`; older entries
 without it use the same legacy actor rule in the journal UI. The stored roll
 wrapper controls filtering in player snapshots. Only public rolls advance the
@@ -83,7 +90,7 @@ is malformed, `loadError` explains the startup problem and normal mutations are
 blocked; call `restoreBackup(validBackup)` to explicitly recover it.
 
 Battle and library methods are `addEnemy`, `removeParticipant`, `clearBattle`,
-`clearEncounter`, `toggleDefeated`, `setEnemyWound`, `adjustResource`, `reorderEnemies`, `addLibrary`,
+`clearEncounter`, `toggleDefeated`, `setEnemyWound`, `setEnemyWeary`, `adjustResource`, `reorderEnemies`, `addLibrary`,
 `removeLibrary`, and `importLibrary`. Enemy battle entries retain the legacy
 fields (`endurance`, `maxEndurance`, `hate`, `maxHate`, `defeated`, and combat
 metadata). `importLibrary(data)` accepts an array or `{library}` and returns the
@@ -163,6 +170,11 @@ Checking the last unchecked wound sets `defeated` to true in the same state upda
 Unchecking a wound never revives the enemy. `toggleDefeated` changes only `defeated`,
 so a manually revived enemy can retain all checked wounds through reload and backup
 restore; checking an already checked wound does not defeat it again.
+
+Battle enemies also have a boolean `weary`, defaulting to false for old saves and
+every newly added enemy. `setEnemyWeary(id, checked)` requires a battle enemy ID
+and a boolean. It is available only to the GM in cloud mode. Library entries strip
+this field, and player snapshots never expose it.
 
 Explicit `saveHero({id, wounded:false})` clears `injury` atomically. Injury writes
 while unwounded are cleared; unrelated saves and loading legacy data preserve

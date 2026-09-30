@@ -6,7 +6,7 @@
 })(typeof window === 'undefined' ? null : window, function () {
   'use strict';
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
-  const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'restoreBackup', 'selectToken'];
+  const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'setEnemyWeary', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'restoreBackup', 'selectToken'];
   function createStore(transport) {
     let snapshot = null, connection = 'connecting', listeners = new Set(), tail = Promise.resolve(), refreshing, stopped = false, epoch = 0;
     const empty = { version: 2, library: [], battle: [], heroes: [], heroParticipants: [], map: null };

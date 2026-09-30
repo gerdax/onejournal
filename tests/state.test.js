@@ -303,3 +303,22 @@ test('enemy notes survive library, encounter, clone, reload and backup', () => {
   assert.equal(store.importLibrary([{...template, notes:'Inne notatki'}]), 0);
   assert.equal(store.addEnemy({name:'Bez notatek'}).notes, '');
 });
+
+test('battle weariness is independent per enemy and absent from library', () => {
+  const disk = storage(), store = createStore(disk);
+  const template = store.addLibrary({ name: 'Ork', weary: true, maxHate: 2 });
+  assert.equal(Object.hasOwn(template, 'weary'), false);
+  const first = store.addEnemy(template), second = store.addEnemy(template);
+  assert.equal(first.weary, false);
+  store.setEnemyWeary(first.id, true);
+  assert.equal(store.getState().battle.find(e => e.id === second.id).weary, false);
+  assert.equal(createStore(disk).getState().battle.find(e => e.id === first.id).weary, true);
+  const restored = createStore(storage()); restored.restoreBackup(store.exportBackup());
+  assert.equal(restored.getState().battle.find(e => e.id === first.id).weary, true);
+  assert.equal(restored.getState().library.some(e => Object.hasOwn(e, 'weary')), false);
+  const legacy = store.exportBackup(); delete legacy.battle[0].weary;
+  restored.restoreBackup(legacy);
+  assert.equal(restored.getState().battle[0].weary, false);
+  assert.throws(() => store.setEnemyWeary(first.id, 'true'), TypeError);
+  assert.throws(() => store.setEnemyWeary('unknown', true));
+});

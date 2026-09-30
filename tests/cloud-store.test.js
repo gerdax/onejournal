@@ -95,3 +95,17 @@ test('GM notebook getter is detached and save carries version with returned resu
   await player.connect();
   assert.equal(player.notebook, null);
 });
+
+test('enemy weariness and bound roll use the command and roll contracts', async () => {
+  const requests = [];
+  const gm = { ...snapshot(), access: { role: 'gm', heroId: null } };
+  const store = createStore({ request: async body => {
+    requests.push(body);
+    return body.action === 'command' ? { ...gm, result: null } : gm;
+  } });
+  await store.connect();
+  await store.setEnemyWeary('orc-1', true);
+  assert.deepEqual(requests[1], { action: 'command', method: 'setEnemyWeary', args: ['orc-1', true] });
+  await store.publishRoll({ id: 'enemy-roll-01', enemyId: 'orc-1', config: { actor: 'enemy' }, raw: {} });
+  assert.equal(requests[2].enemyId, 'orc-1');
+});

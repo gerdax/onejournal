@@ -324,3 +324,71 @@ test('replacing history from backup invalidates unpublished old rolls', async ()
   await assert.rejects(f.core.handle('gm', { action: 'roll', id: 'old-before-restore', rollEpoch: 0, config, raw: { feat: [1], success: [] } }), { status: 409 });
   assert.equal(f.doc.rolls.length, 0);
 });
+
+test('only GM sets battle enemy weariness without exposing it to players', async () => {
+  const f = fixture();
+  const heroId = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A' }] })).result.id;
+  const enemyId = (await f.core.handle('gm', { action: 'command', method: 'addEnemy', args: [{ name: 'Ork' }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId });
+  await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const before = f.doc.publicRevision;
+  await f.core.handle('gm', { action: 'command', method: 'setEnemyWeary', args: [enemyId, true] });
+  assert.equal(f.doc.state.battle[0].weary, true);
+  assert.equal(f.doc.publicRevision, before);
+  assert.equal((await f.core.handle('p1', { action: 'snapshot' })).participants[0].weary, undefined);
+  await assert.rejects(f.core.handle('p1', { action: 'command', method: 'setEnemyWeary', args: [enemyId, false] }), { status: 403 });
+  await assert.rejects(f.core.handle('gm', { action: 'command', method: 'setEnemyWeary', args: [enemyId, 1] }), { status: 400 });
+});
+
+test('bound enemy roll spends exactly once and retains historical name and ID in backup', async () => {
+  const f = fixture();
+  const enemyId = (await f.core.handle('gm', { action: 'command', method: 'addEnemy', args: [{ name: 'Ork – wartownik', maxHate: 1, resourceType: 'determination' }] })).result.id;
+  const config = { actor: 'enemy', baseDice: 0, bonus: 0, featMode: 'normal', target: '', hope: false, inspired: false, enemyResource: true, miserable: false, exhausted: true };
+  const request = { action: 'roll', id: 'enemy-roll-01', enemyId, config, raw: { feat: [11], success: [1] } };
+  const first = await f.core.handle('gm', request);
+  assert.equal(first.rolls[0].name, 'Ork – wartownik');
+  assert.equal(first.rolls[0].enemyId, enemyId);
+  assert.equal(first.state.battle[0].hate, 0);
+  await f.core.handle('gm', request);
+  assert.equal(f.doc.state.battle[0].hate, 0);
+  await assert.rejects(f.core.handle('gm', { ...request, enemyId: 'other' }), { status: 409 });
+  await assert.rejects(f.core.handle('gm', { ...request, id: 'enemy-roll-02' }), { status: 409 });
+  assert.equal(f.doc.rolls.length, 1);
+  const backup = await f.core.handle('gm', { action: 'export' });
+  backup.state.battle = [];
+  await f.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [backup] });
+  assert.equal(f.doc.rolls[0].entry.name, 'Ork – wartownik');
+  assert.equal(f.doc.rolls[0].entry.enemyId, enemyId);
+});
+
+test('parallel last-point spends serialize, and invalid enemy bindings do not publish', async () => {
+  const f = fixture();
+  const enemyId = (await f.core.handle('gm', { action: 'command', method: 'addEnemy', args: [{ name: 'Ork', maxHate: 1 }] })).result.id;
+  const base = { actor: 'enemy', baseDice: 0, bonus: 0, featMode: 'normal', target: '', hope: false, inspired: false, enemyResource: true, miserable: false, exhausted: false };
+  const roll = id => ({ action: 'roll', id, enemyId, config: base, raw: { feat: [5], success: [1] } });
+  const results = await Promise.allSettled([f.core.handle('gm', roll('enemy-race-1')), f.core.handle('gm', roll('enemy-race-2'))]);
+  assert.deepEqual(results.map(r => r.status).sort(), ['fulfilled', 'rejected']);
+  assert.equal(f.doc.rolls.length, 1);
+  assert.equal(f.doc.state.battle[0].hate, 0);
+  await assert.rejects(f.core.handle('gm', { ...roll('enemy-race-3'), config: { ...base, actor: 'hero' } }), { status: 403 });
+  await assert.rejects(f.core.handle('gm', { ...roll('enemy-race-4'), enemyId: 'missing' }), { status: 409 });
+  const heroId = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A' }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId });
+  await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  await assert.rejects(f.core.handle('p1', { ...roll('enemy-race-5'), heroId, config: { ...base, actor: 'hero' } }), { status: 403 });
+  await f.core.handle('gm', { action: 'command', method: 'removeParticipant', args: [enemyId] });
+  await assert.rejects(f.core.handle('gm', { ...roll('enemy-race-6'), config: { ...base, enemyResource: false }, raw: { feat: [5], success: [] } }), { status: 409 });
+  assert.equal(f.doc.rolls.length, 1);
+});
+
+test('bound enemy roll backups preserve long imported names', async () => {
+  const f = fixture();
+  const name = 'Strażnik '.repeat(150);
+  const enemyId = (await f.core.handle('gm', { action: 'command', method: 'addEnemy', args: [{ name, maxHate: 1 }] })).result.id;
+  const config = { actor: 'enemy', baseDice: 0, bonus: 0, featMode: 'normal', target: '', hope: false, inspired: false, enemyResource: false, miserable: false, exhausted: false };
+  await f.core.handle('gm', { action: 'roll', id: 'long-enemy-name', enemyId, config, raw: { feat: [5], success: [] } });
+  const backup = await f.core.handle('gm', { action: 'export' });
+  await f.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [backup] });
+  assert.equal(f.doc.rolls[0].entry.name, name);
+  assert.equal(f.doc.rolls[0].entry.enemyId, enemyId);
+});

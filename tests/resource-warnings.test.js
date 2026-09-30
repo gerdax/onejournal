@@ -73,3 +73,35 @@ elements.endurance.value = '12'; elements.hope.value = '3';
 updateResourceWarnings(editor);
 assert(!labelClasses.weary.has('is-resource-warning'));
 assert(!labelClasses.miserable.has('is-resource-warning'));
+
+// Exercise dropping and picking up a bow through the actual state transition,
+// then read the same participant data used by the map's resource warnings.
+const { createStore } = require('../state.js');
+for (const fatigue of [0, 2]) {
+  const data = new Map();
+  const store = createStore({
+    getItem: key => data.get(key) ?? null,
+    setItem: (key, value) => data.set(key, value)
+  });
+  const hero = store.saveHero({
+    name: 'Łucznik', endurance: 10, maxEndurance: 20, load: 11, fatigue,
+    weapon0Name: 'Łuk', weapon0Load: '2', armourLoad: 9
+  });
+  store.addHero(hero.id);
+  const warnings = () => getResourceWarnings(store.getParticipants()[0]);
+  assert.equal(warnings().endurance, true);
+  store.saveHero({ id: hero.id, weapon0Enabled: false });
+  assert.equal(store.getParticipants()[0].load, 9);
+  assert.equal(warnings().load, false);
+  assert.equal(warnings().endurance, fatigue > 0,
+    'dropping a bow clears the warning only above load plus fatigue');
+  store.saveHero({ id: hero.id, weapon0Enabled: false });
+  assert.equal(store.getParticipants()[0].load, 9, 'repeated save must not subtract twice');
+  store.saveHero({ id: hero.id, fatigue: 1 });
+  assert.equal(warnings().endurance, true, 'equality still triggers the warning');
+  store.saveHero({ id: hero.id, fatigue: 0 });
+  assert.equal(warnings().endurance, false);
+  store.saveHero({ id: hero.id, weapon0Enabled: true });
+  assert.equal(store.getParticipants()[0].load, 11);
+  assert.equal(warnings().endurance, true);
+}

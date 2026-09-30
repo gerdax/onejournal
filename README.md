@@ -29,6 +29,8 @@ Frontend lokalny: `python3 -m http.server 8877`, adres `http://localhost:8877/`.
 - `NODE_PATH=<katalog-node_modules> node tests/avatar-online.cjs` — wgrywanie, walidacja, synchronizacja i usuwanie awatarów oraz układ mobilny na izolowanych danych.
 - `NODE_PATH=<katalog-node_modules> node tests/notebook-online.cjs` — notatnik MG, formatowanie, schowek, zapis, konflikty, utrata sieci i układ mobilny na izolowanych danych.
 - `NODE_PATH=<katalog-node_modules> node tests/dice-online.cjs` — rzeczywisty rzut WebGL oraz ponowienie publikacji po awarii sieci.
+- `NODE_PATH=<katalog-node_modules> node tests/enemy-weary-online.cjs` — Wyczerpanie przeciwnika, ostrzeżenia zasobu i niezależność od biblioteki.
+- `NODE_PATH=<katalog-node_modules> node tests/enemy-rolls-online.cjs` — rzuty wybranego przeciwnika i wydawanie Nienawiści/Determinacji.
 
 Testy przeglądarkowe wymagają Playwright i Chrome. `CHROME_PATH` nadpisuje domyślną ścieżkę macOS. Pozostałe odziedziczone skrypty `.cjs` opisują lokalny interfejs bestiary i nie są testami online; nie uruchamiaj ich na produkcji.
 

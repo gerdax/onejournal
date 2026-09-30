@@ -5,6 +5,21 @@
     miserable: false, bonus: 0, hope: false, inspired: false, enemyResource: false, target: '' };
   let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, headerOnly = false;
   let pressStartedInSheet = false;
+  let boundEnemyId = null, boundEnemyName = '', genericConfig = null, boundConfig = null, usingBoundConfig = false;
+
+  function currentEnemy() {
+    return boundEnemyId ? root.OneRingStore.getParticipants().find(person => person.id === boundEnemyId && person.type === 'enemy') || null : null;
+  }
+
+  function switchActor(actor) {
+    if (!boundEnemyId) { config.actor = actor; return; }
+    if (usingBoundConfig) boundConfig = { ...config };
+    else genericConfig = { ...config };
+    usingBoundConfig = actor === 'enemy';
+    Object.assign(config, usingBoundConfig ? boundConfig : genericConfig);
+    config.actor = actor;
+    setup.querySelector('[data-target]').value = config.target;
+  }
 
   function playerHero() {
     const store = root.OneRingStore;
@@ -74,7 +89,8 @@
       const choice = event.target.closest('[data-choice] button');
       if (choice) {
         const field = choice.parentElement.dataset.choice;
-        config[field] = field === 'baseDice' ? Number(choice.dataset.value) : choice.dataset.value;
+        if (field === 'actor') switchActor(choice.dataset.value);
+        else config[field] = field === 'baseDice' ? Number(choice.dataset.value) : choice.dataset.value;
         renderSetup();
       }
       const step = event.target.closest('[data-step]');
@@ -106,6 +122,12 @@
       });
     });
     const hero = playerHero();
+    const enemy = usingBoundConfig ? currentEnemy() : null;
+    setup.querySelector('[data-choice="actor"] button[data-value="enemy"]').textContent = boundEnemyId ? boundEnemyName : 'Przeciwnik';
+    setup.querySelector('.dice-spend-text').textContent = enemy
+      ? (enemy.resourceType === 'determination' ? 'Wydaj Determinację' : 'Wydaj Nienawiść')
+      : 'Wydaj Nienawiść/Determinację';
+    if (usingBoundConfig && !(Number(enemy?.hate) > 0)) config.enemyResource = false;
     if (store.access.role === 'player' && !(Number(hero?.hope) > 0)) {
       config.hope = false;
       config.inspired = false;
@@ -119,6 +141,7 @@
     setup.querySelector('.dice-bonus-value').textContent = `${config.bonus > 0 ? '+' : ''}${config.bonus}k`;
     setup.querySelectorAll('button, input').forEach(control => { control.disabled = !!pending; });
     setup.querySelector('[data-check="hope"]').disabled = !!pending || (store.access.role === 'player' && !(Number(hero?.hope) > 0));
+    setup.querySelector('[data-check="enemyResource"]').disabled = !!pending || (usingBoundConfig && !(Number(enemy?.hate) > 0));
     setup.querySelector('[data-step="-1"]').disabled = !!pending || config.bonus <= -6;
     setup.querySelector('[data-step="1"]').disabled = !!pending || config.bonus >= 6;
     const pool = root.DiceRules.calculatePool(config);
@@ -172,13 +195,31 @@
     opener = document.activeElement;
     headerOnly = false;
     pressStartedInSheet = false;
+    setup.querySelector('.dice-error').hidden = true;
+    setup.querySelector('.dice-error').textContent = '';
     const hero = playerHero();
+    const selected = root.OneRingStore.access.role === 'gm' ? root.OneRingMap?.getSelectedParticipant?.() : null;
+    if (selected?.type === 'enemy') {
+      boundEnemyId = selected.id;
+      boundEnemyName = selected.name || 'Przeciwnik';
+      genericConfig = { ...config };
+      boundConfig = { ...config, actor: 'enemy', exhausted: !!selected.weary, miserable: false,
+        hope: false, inspired: false, enemyResource: false };
+      usingBoundConfig = true;
+      Object.assign(config, boundConfig);
+    } else {
+      boundEnemyId = null;
+      boundEnemyName = '';
+      genericConfig = boundConfig = null;
+      usingBoundConfig = false;
+    }
     if (hero) {
       config.exhausted = !!hero.weary;
       config.miserable = !!hero.miserable;
       config.hope = false;
       config.inspired = false;
     }
+    setup.querySelector('[data-target]').value = config.target;
     dialog.dataset.view = 'setup';
     setup.hidden = false;
     resultPanel.hidden = true;
@@ -193,6 +234,14 @@
     if (!dialog || !dialog.open) return;
     generation++;
     dialog.close();
+    if (boundEnemyId) {
+      if (!usingBoundConfig) genericConfig = { ...config };
+      Object.assign(config, genericConfig);
+      boundEnemyId = null;
+      boundEnemyName = '';
+      genericConfig = boundConfig = null;
+      usingBoundConfig = false;
+    }
     pressStartedInSheet = false;
     if (root.DiceEngine && typeof root.DiceEngine.clear === 'function') root.DiceEngine.clear();
     if (opener && typeof opener.focus === 'function' && opener.isConnected) opener.focus();
@@ -305,6 +354,15 @@
       renderSetup();
       return;
     }
+    if (usingBoundConfig && !currentEnemy()) {
+      showError('Ten przeciwnik został usunięty. Zamknij i otwórz panel kości ponownie.');
+      return;
+    }
+    if (usingBoundConfig && config.enemyResource && !(Number(currentEnemy()?.hate) > 0)) {
+      showError('Brak Nienawiści lub Determinacji — wyłącz jej wydawanie przed rzutem.');
+      renderSetup();
+      return;
+    }
     if (!root.DiceEngine || typeof root.DiceEngine.roll !== 'function') {
       showError('Silnik kości jest niedostępny.');
       return;
@@ -312,7 +370,7 @@
     const token = ++generation;
     const snapshot = { ...config };
     let prepared;
-    try { prepared = root.OneJournalRolls.prepare(snapshot); }
+    try { prepared = root.OneJournalRolls.prepare(snapshot, undefined, usingBoundConfig ? boundEnemyId : null); }
     catch (error) { showError(error.message); return; }
     const pool = root.DiceRules.calculatePool(snapshot);
     const button = setup.querySelector('.dice-roll');

@@ -141,15 +141,18 @@
       throw error;
     } finally { publishing.delete(id); render(); }
   }
-  function prepare(config, heroId) {
+  function prepare(config, heroId, enemyId) {
     if (!store.canWrite) throw new Error('Brak połączenia — rzut jest zablokowany.');
+    if (enemyId != null && (store.access.role !== 'gm' || config.actor !== 'enemy' || typeof enemyId !== 'string'))
+      throw new Error('Wybrany przeciwnik może rzucać tylko jako MG.');
     if (store.access.role === 'player') {
       if (config.actor !== 'hero') throw new Error('Gracz może rzucać tylko swoim bohaterem.');
       heroId = store.access.heroId;
     }
     if (store.access.role === 'player' && !store.getState().heroes.some(h => h.id === heroId)) throw new Error('Brak przypisanego bohatera.');
     if (store.access.role === 'gm') heroId = null;
-    return { id: crypto.randomUUID(), rollEpoch: store.rollEpoch, heroId: config.actor === 'hero' ? heroId : null, config: { ...config } };
+    return { id: crypto.randomUUID(), rollEpoch: store.rollEpoch, heroId: config.actor === 'hero' ? heroId : null,
+      ...(enemyId ? { enemyId } : {}), config: { ...config } };
   }
   function capture(prepared, raw) {
     const entry = { ...prepared, raw: JSON.parse(JSON.stringify(raw)) };
