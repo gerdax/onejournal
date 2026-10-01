@@ -30,6 +30,7 @@ Frontend lokalny: `python3 -m http.server 8877`, adres `http://localhost:8877/`.
 - `NODE_PATH=<katalog-node_modules> node tests/notebook-online.cjs` — notatnik MG, formatowanie, schowek, zapis, konflikty, utrata sieci i układ mobilny na izolowanych danych.
 - `NODE_PATH=<katalog-node_modules> node tests/dice-online.cjs` — rzeczywisty rzut WebGL oraz ponowienie publikacji po awarii sieci.
 - `NODE_PATH=<katalog-node_modules> node tests/enemy-weary-online.cjs` — Wyczerpanie przeciwnika, ostrzeżenia zasobu i niezależność od biblioteki.
+- `NODE_PATH=<katalog-node_modules> node tests/dice-stance-online.cjs` — domyślne premie z postawy MG/gracza, ręczne korekty i rzeczywista pula rzutu.
 - `NODE_PATH=<katalog-node_modules> node tests/gm-token-rolls-online.cjs` — kontekst rzutu MG, prywatność, zasoby i układ mobilny.
 - `NODE_PATH=<katalog-node_modules> node tests/map-deselect-online.cjs` — odznaczanie żetonów myszą, dotykiem i klawiaturą oraz synchronizacja wyboru.
 - `NODE_PATH=<katalog-node_modules> node tests/enemy-rolls-online.cjs` — rzuty wybranego przeciwnika i wydawanie Nienawiści/Determinacji.

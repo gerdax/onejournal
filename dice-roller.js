@@ -213,8 +213,11 @@
       config.inspired = false;
       config.enemyResource = false;
     } else if (root.OneRingStore.access.role === 'gm') config.privateRoll = true;
-    const hero = playerHero();
+    const hero = currentBoundHero() || playerHero();
     if (hero) {
+      // Postawa sets the opening default; refreshes and subsequent rolls keep manual edits.
+      config.bonus = hero.stance === 'Zapalczywa' ? 1
+        : hero.stance === 'Defensywna' || hero.stance === 'Ostrożna' ? -1 : 0;
       config.exhausted = !!hero.weary;
       config.miserable = !!hero.miserable;
       config.hope = false;
