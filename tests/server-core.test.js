@@ -392,3 +392,85 @@ test('bound enemy roll backups preserve long imported names', async () => {
   assert.equal(f.doc.rolls[0].entry.name, name);
   assert.equal(f.doc.rolls[0].entry.enemyId, enemyId);
 });
+
+test('GM bound hero rolls spend Hope atomically and synchronize private costs without leaking results', async () => {
+  const f = fixture();
+  const heroId = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'Ada', hope: 2, maxHope: 5 }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId });
+  await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const config = { actor: 'hero', baseDice: 0, bonus: 0, featMode: 'normal', hope: true, inspired: false, enemyResource: false, miserable: false, exhausted: false, privateRoll: true };
+  const request = { action: 'roll', id: 'gm-bound-private', boundHeroId: heroId, config, raw: { feat: [7], success: [4] } };
+  const version = f.doc.heroVersions[heroId], revision = f.doc.publicRevision;
+  const first = await f.core.handle('gm', request);
+  assert.equal(first.rolls[0].name, 'Ada');
+  assert.equal(first.rolls[0].heroId, heroId);
+  assert.equal(first.rolls[0].heroName, 'Ada');
+  assert.equal(first.rolls[0].visibility, 'private');
+  assert.equal(f.doc.heroVersions[heroId], version + 1);
+  assert.equal(f.doc.publicRevision, revision + 1);
+  const player = await f.core.handle('p1', { action: 'snapshot' });
+  assert.equal(player.state.heroes[0].hope, 1);
+  assert.equal(player.rolls.length, 0);
+  await f.core.handle('gm', request);
+  assert.equal(f.doc.state.heroes[0].hope, 1);
+  assert.equal(f.doc.heroVersions[heroId], version + 1);
+  const outcomes = await Promise.allSettled(['a', 'b'].map(suffix => f.core.handle('gm', { ...request, id: 'gm-bound-race-' + suffix, config: { ...config, privateRoll: false } })));
+  assert.equal(outcomes.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(outcomes.find(r => r.status === 'rejected').reason.status, 409);
+  assert.equal(f.doc.state.heroes[0].hope, 0);
+  assert.equal(f.doc.rolls.length, 2);
+  assert.equal((await f.core.handle('p1', { action: 'snapshot' })).rolls.length, 1);
+  await f.core.handle('gm', { action: 'clearRolls' });
+  await assert.rejects(f.core.handle('gm', request), { status: 409 });
+  assert.equal(f.doc.rolls.length, 0);
+});
+
+test('GM hero binding validates role, actor, identity and retry target while legacy generic rolls never spend', async () => {
+  const f = fixture();
+  const heroId = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'Ada', hope: 2, maxHope: 5 }] })).result.id;
+  const otherId = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'Borin', hope: 2, maxHope: 5 }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId });
+  await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const config = { actor: 'hero', baseDice: 0, bonus: 0, featMode: 'normal', hope: true, inspired: false, enemyResource: false, miserable: false, exhausted: false, privateRoll: false };
+  const request = { action: 'roll', id: 'gm-binding-check', boundHeroId: heroId, config, raw: { feat: [7], success: [4] } };
+  await assert.rejects(f.core.handle('p1', { ...request, heroId }), { status: 403 });
+  await assert.rejects(f.core.handle('gm', { ...request, config: { ...config, actor: 'enemy' } }), { status: 403 });
+  await assert.rejects(f.core.handle('gm', { ...request, enemyId: 'some-enemy' }), { status: 403 });
+  await assert.rejects(f.core.handle('gm', { ...request, boundHeroId: '' }), { status: 400 });
+  await assert.rejects(f.core.handle('gm', { ...request, boundHeroId: 'missing' }), { status: 409 });
+  await f.core.handle('gm', { ...request, boundHeroId: undefined, heroId });
+  assert.equal(f.doc.state.heroes[0].hope, 2);
+  assert.equal(f.doc.rolls[0].entry.name, 'MG');
+  assert.equal(f.doc.rolls[0].entry.heroId, null);
+  const bound = { ...request, id: 'gm-binding-valid' };
+  await f.core.handle('gm', bound);
+  await assert.rejects(f.core.handle('gm', { ...bound, boundHeroId: otherId }), { status: 409 });
+  assert.equal(f.doc.state.heroes[1].hope, 2);
+  await f.core.handle('gm', { action: 'command', method: 'deleteHero', args: [heroId] });
+  await f.core.handle('gm', bound); // A settled retry remains valid after deletion.
+  await assert.rejects(f.core.handle('gm', { ...bound, id: 'gm-binding-gone' }), { status: 409 });
+  const backup = await f.core.handle('gm', { action: 'export' });
+  assert.equal(backup.rolls.find(r => r.id === bound.id).heroName, 'Ada');
+  const restored = fixture();
+  await restored.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [backup] });
+  const historical = (await restored.core.handle('gm', { action: 'snapshot' })).rolls.find(r => r.id === bound.id);
+  assert.equal(historical.heroId, heroId);
+  assert.equal(historical.heroName, 'Ada');
+  assert.equal(historical.name, 'Ada');
+});
+
+test('both generic GM modes are named MG and resource modifiers do not change sheets', async () => {
+  const f = fixture();
+  await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'Ada', hope: 2 }] });
+  await f.core.handle('gm', { action: 'command', method: 'addEnemy', args: [{ name: 'Ork', hate: 2 }] });
+  const before = structuredClone(f.doc.state);
+  for (const actor of ['hero', 'enemy']) {
+    for (const privateRoll of [true, false]) {
+      const config = { actor, baseDice: 0, bonus: 0, featMode: 'normal', hope: true, inspired: false, enemyResource: true, miserable: false, exhausted: false, privateRoll };
+      const result = await f.core.handle('gm', { action: 'roll', id: `generic-${actor}-${privateRoll}`, config, raw: { feat: [7], success: [4] } });
+      assert.equal(result.rolls.at(-1).name, 'MG');
+      assert.equal(result.rolls.at(-1).visibility, privateRoll ? 'private' : 'public');
+    }
+  }
+  assert.deepEqual(f.doc.state, before);
+});

@@ -267,7 +267,7 @@
   const isPlayer = () => store.access?.role === 'player';
   const viewSelection = () => isPlayer() ? store.getParticipants().find(p => p.type === 'hero' && p.heroId === store.access.heroId)?.id || null : store.selection || null;
   const canSave = () => store.connection === 'online' && store.canWrite;
-  let currentMap = null, selected = null, pendingSelection = null, zoom = 1, offsetX = 0, offsetY = 0, fittedKey = '', gesture = null;
+  let currentMap = null, selected = null, pendingSelection, selectionSequence = 0, selectionWrite = Promise.resolve(), zoom = 1, offsetX = 0, offsetY = 0, fittedKey = '', gesture = null;
   const touchPoints = new Map();
   let touchLocked = false, touchGesture = null, suppressTouchClick = false;
   const el = (tag, className, textValue) => { const node = doc.createElement(tag); if (className) node.className = className; if (textValue != null) node.textContent = textValue; return node; };
@@ -428,9 +428,11 @@
     const heading = el('div', 'map-panel-heading');
     if (isPlayer()) heading.append(el('p', 'eyebrow', 'BOHATER'));
     else {
-      const previous = el('button', 'map-cycle-prev', '‹'), next = el('button', 'map-cycle-next', '›');
+      const previous = el('button', 'map-cycle-prev', '‹'), next = el('button', 'map-cycle-next', '›'), deselect = el('button', 'map-deselect', '⊘');
       const typeName = person.type === 'hero' ? 'bohater' : 'przeciwnik';
       previous.type = next.type = 'button';
+      deselect.type = 'button'; deselect.title = 'Odznacz postać'; deselect.setAttribute('aria-label', deselect.title);
+      deselect.addEventListener('click', () => selectParticipant(null));
       previous.setAttribute('aria-label', `Poprzedni ${typeName}`);
       next.setAttribute('aria-label', `Następny ${typeName}`);
       const peerCount = participants.filter(p => p.type === person.type).length;
@@ -440,7 +442,7 @@
         const replacement = panel.querySelector(direction < 0 ? '.map-cycle-prev' : '.map-cycle-next');
         if (replacement) replacement.focus();
       });
-      const navigation = el('div', 'map-panel-navigation'); navigation.append(previous, next);
+      const navigation = el('div', 'map-panel-navigation'); navigation.append(deselect, previous, next);
       lastSelectedByType[person.type] = person.id;
       const otherType = person.type === 'hero' ? 'enemy' : 'hero';
       const otherParticipants = participants.filter(item => item.type === otherType);
@@ -538,7 +540,7 @@
   function zoomAt(factor, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) { if (!currentMap) return; const next = clamp(zoom * factor, .1, 3); offsetX = x - (x - offsetX) * next / zoom; offsetY = y - (y - offsetY) * next / zoom; zoom = next; transform(); }
   function refresh(snapshot) {
     const map = snapshot.map, participants = store.getParticipants();
-    selected = viewSelection();
+    selected = pendingSelection !== undefined ? pendingSelection : viewSelection();
     const key = map ? JSON.stringify([map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
     const terrainChanged = key !== fittedKey;
     if (terrainChanged) { gesture = null; touchPoints.clear(); touchGesture = null; touchLocked = false; }
@@ -650,7 +652,7 @@
     if (gesture && gesture.type === 'token') {
       gesture.node.style.left = gesture.x + 'px';
       gesture.node.style.top = gesture.y + 'px';
-      selected = viewSelection();
+      selected = pendingSelection !== undefined ? pendingSelection : viewSelection();
       renderPanel(store.getParticipants());
       tokens.querySelectorAll('.map-token').forEach(node => node.classList.toggle('is-selected', node.dataset.id === selected));
     }
@@ -688,12 +690,17 @@
       if (touchLocked || !event.isPrimary) return;
     }
     if (gesture || touchLocked) return;
-    const marker = event.target.closest('.map-token');
+    let marker = event.target.closest('.map-token');
     if (marker && !isPlayer() && canSave()) {
       marker.focus();
       const previousSelection = selected;
-      selectParticipant(marker.dataset.id);
-      const pos = currentMap.positions[selected]; gesture = { type: 'token', id: selected, node: marker, previousSelection, startX: event.clientX, startY: event.clientY, x: pos.x, y: pos.y };
+      const id = marker.dataset.id;
+      if (id !== selected) {
+        selectParticipant(id);
+        marker = Array.from(tokens.children).find(node => node.dataset.id === id) || marker;
+        marker.focus();
+      }
+      const pos = currentMap.positions[id]; gesture = { type: 'token', id, node: marker, previousSelection, startX: event.clientX, startY: event.clientY, x: pos.x, y: pos.y, moved: false };
     } else if (event.pointerType !== 'touch') gesture = { type: 'pan', startX: event.clientX, startY: event.clientY, x: offsetX, y: offsetY };
     if (!gesture) return;
     gesture.pointerId = event.pointerId;
@@ -718,7 +725,7 @@
     }
     if (!gesture || event.pointerId !== gesture.pointerId || !currentMap) return;
     if (gesture.type === 'pan') { offsetX = gesture.x + event.clientX - gesture.startX; offsetY = gesture.y + event.clientY - gesture.startY; transform(); }
-    else { const x = clamp(Math.round(gesture.x + (event.clientX - gesture.startX) / zoom), 0, currentMap.width - 1), y = clamp(Math.round(gesture.y + (event.clientY - gesture.startY) / zoom), 0, currentMap.height - 1); gesture.node.style.left = clamp(x, 30, currentMap.width - 30) + 'px'; gesture.node.style.top = clamp(y, 30, currentMap.height - 30) + 'px'; gesture.nextX = x; gesture.nextY = y; }
+    else { if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 5) gesture.moved = true; if (!gesture.moved) return; const x = clamp(Math.round(gesture.x + (event.clientX - gesture.startX) / zoom), 0, currentMap.width - 1), y = clamp(Math.round(gesture.y + (event.clientY - gesture.startY) / zoom), 0, currentMap.height - 1); gesture.node.style.left = clamp(x, 30, currentMap.width - 30) + 'px'; gesture.node.style.top = clamp(y, 30, currentMap.height - 30) + 'px'; gesture.nextX = x; gesture.nextY = y; }
   });
   function finishGesture(event) {
     if (desktopPress && event.pointerId === desktopPress.id) {
@@ -740,7 +747,9 @@
     if (!gesture || event.pointerId !== gesture.pointerId) return;
     const done = gesture; gesture = null;
     if (event.type !== 'pointerup') { if (done.type === 'token') restoreTokenNode(done); return; }
-    if (done.type === 'token' && Number.isFinite(done.nextX)) run(() => store.moveToken(done.id, done.nextX, done.nextY)).then(ok => { if (!ok && done.node.isConnected) restoreTokenNode(done); });
+    const moved = done.type === 'token' && (done.moved || Math.hypot(event.clientX - done.startX, event.clientY - done.startY) > 5);
+    if (moved && Number.isFinite(done.nextX)) run(() => store.moveToken(done.id, done.nextX, done.nextY)).then(ok => { if (!ok && done.node.isConnected) restoreTokenNode(done); });
+    else if (done.type === 'token' && !moved && done.previousSelection === done.id) selectParticipant(null);
   }
   function restoreTokenNode(done) { done.node.style.left = done.x + 'px'; done.node.style.top = done.y + 'px'; }
   viewport.addEventListener('pointerup', finishGesture); viewport.addEventListener('pointercancel', finishGesture); viewport.addEventListener('lostpointercapture', finishGesture);
@@ -750,23 +759,33 @@
     setExpanded(!expanded);
   });
   viewport.addEventListener('click', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (suppressTouchClick && event.pointerType === 'touch') { event.preventDefault(); event.stopPropagation(); } }, true);
-  tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker || isPlayer()) return; selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
-  tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(marker.dataset.id); const pos = currentMap.positions[selected], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(selected, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
+  tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker || isPlayer() || event.detail) return; const id = marker.dataset.id; selectParticipant(selected === id ? null : id); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); });
+  tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; const id = marker.dataset.id; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(selected === id ? null : id); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(id); const pos = currentMap.positions[id], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(id, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); });
   if (root.ResizeObserver) new root.ResizeObserver(() => { if (currentMap && section.classList.contains('active') && viewport.clientWidth && viewport.clientHeight && !gesture && !touchPoints.size) fit(); }).observe(viewport);
   doc.addEventListener('one-ring:tab', event => { if (event.detail === 'map' || event.detail && event.detail.tab === 'map') root.requestAnimationFrame(() => { if (currentMap && viewport.clientWidth) fit(); }); });
   store.subscribe(refresh); refresh(store.getState());
   function selectParticipant(id) {
     if (isPlayer() || !canSave()) return;
     const participants = store.getParticipants();
-    if (!participants.some(person => person.id === id)) return;
-    if (id === pendingSelection || id === store.selection) return;
+    if (id !== null && !participants.some(person => person.id === id)) return;
+    if (id === selected) return;
+    const sequence = ++selectionSequence;
     pendingSelection = id;
     selected = id;
     if (currentMap) renderTokens(currentMap, participants);
     renderPanel(participants);
-    run(() => store.selectToken(id)).then(ok => { if (pendingSelection !== id) return; pendingSelection = null; if (!ok) { selected = viewSelection(); if (currentMap) renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); } });
+    selectionWrite = selectionWrite.then(async () => {
+      if (sequence !== selectionSequence) return;
+      await run(() => store.selectToken(id));
+      if (sequence !== selectionSequence) return;
+      pendingSelection = undefined;
+      selected = viewSelection();
+      const latestParticipants = store.getParticipants();
+      if (currentMap) renderTokens(currentMap, latestParticipants);
+      renderPanel(latestParticipants);
+    });
   }
   root.OneRingMap = { generateTerrain, fit, selectParticipant,
-    getSelectedParticipant: () => store.getParticipants().find(person => person.id === (pendingSelection || selected)) || null
+    getSelectedParticipant: () => store.getParticipants().find(person => person.id === selected) || null
   };
 })(typeof window !== 'undefined' ? window : null);

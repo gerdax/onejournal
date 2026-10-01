@@ -42,6 +42,7 @@
 .map-panel-navigation { display: flex; gap: 5px; }
 .map-panel-heading button { width: 32px; height: 32px; border: 1px solid var(--line); background: #fffdf8; color: var(--clay); cursor: pointer; font: 24px Georgia, serif; line-height: 1; }
 .map-panel-heading button:disabled { opacity: .4; cursor: default; }
+.map-panel-heading .map-deselect { font-size: 21px; }
 .map-panel h3 { overflow-wrap: anywhere; margin: 0 0 18px; font-size: 24px; line-height: 1.1; }
 .map-panel > .map-enemy-name { color: var(--clay); }
 .map-panel-stance, .map-panel-injury { display: grid; gap: 5px; color: var(--clay); font: 700 10px 'DM Mono', monospace; text-transform: uppercase; }

@@ -26,11 +26,11 @@ body:has(.dice-dialog[open]) .dice-launch { display: none; }
 .dice-field { padding: 0; margin: 0; border: 0; min-width: 0; }
 .dice-field legend, .dice-bonus > span, .dice-target { margin-bottom: 6px; font: 700 12px Manrope, sans-serif; color: #594234; }
 .dice-options { display: flex; gap: 5px; flex-wrap: wrap; }
-.dice-actor-row { display: flex; align-items: center; gap: 12px; }
-.dice-actor-row .dice-options { flex: 1; min-width: 0; flex-wrap: nowrap; }
-.dice-actor-row .dice-options button { flex: 1 1 0; min-width: 0; }
-.dice-private { display: inline-flex; align-items: center; gap: 5px; flex: none; color: #493a2d; font: 600 12px Manrope, sans-serif; cursor: pointer; }
-.dice-private input { width: 16px; height: 16px; margin: 0; accent-color: #60483a; }
+.dice-actors { flex-wrap: nowrap; }
+.dice-actors button { display: grid; place-items: center; min-width: 0; }
+.dice-actors .dice-feat-symbol { width: 26px; height: 26px; }
+.dice-private { display: inline-flex; align-items: center; gap: 6px; flex: none; width: auto; color: #493a2d; font: 600 13px Manrope, sans-serif; letter-spacing: 0; cursor: pointer; }
+.dice-private input { width: 18px; height: 18px; margin: 0; accent-color: #60483a; }
 .dice-options button { flex: 1 1 auto; min-height: 38px; padding: 7px 10px; border: 1px solid #bca78d; border-radius: 7px; background: #fffaf1; color: #3e3025; font: 700 12px Manrope, sans-serif; cursor: pointer; }
 .dice-options button[aria-pressed="true"] { background: #584438; color: #fff7e9; border-color: #584438; }
 .dice-counts { flex-wrap: nowrap; }
@@ -52,8 +52,9 @@ body:has(.dice-dialog[open]) .dice-launch { display: none; }
 .dice-target { display: grid; gap: 3px; margin: 0; }
 .dice-target span { font-weight: 400; }
 .dice-target input { width: 105px; height: 35px; padding: 5px 8px; background: #fffaf1; border-color: #bca78d; }
-.dice-pool { padding-top: 9px; border-top: 1px solid #d7c5ad; color: #5a4435; font: 700 12px Manrope, sans-serif; }
-.dice-preview { display: flex; gap: 5px; flex-wrap: wrap; min-height: 26px; }
+.dice-pool-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dice-pool { padding-top: 9px; border-top: 1px solid #d7c5ad; min-width: 0; color: #5a4435; font: 700 12px Manrope, sans-serif; }
+.dice-preview { flex: 1; min-width: 0; display: flex; gap: 5px; flex-wrap: wrap; min-height: 26px; }
 .dice-preview-die { display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid #ab987d; border-radius: 5px; background: #fffdf5; color: #3d342b; font: 700 12px Georgia, serif; box-shadow: 1px 2px 2px #57483833; }
 .dice-preview-die.dice-feat { border-radius: 50%; background: #e5d4ad; }
 .dice-dialog[data-actor="enemy"] .dice-preview-die { background: #242526; border-color: #707170; color: #f5f1e8; }

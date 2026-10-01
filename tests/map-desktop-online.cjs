@@ -136,6 +136,8 @@ const { startFixture } = require('./fixture-server.cjs');
     await hybridPage.locator('[data-tab="map"]').click();
     const hybridStage = hybridPage.locator('#map-stage');
     const hybridZoom = () => hybridStage.evaluate(node => new DOMMatrix(node.style.transform).a);
+    // Let the tab's queued fit and ResizeObserver settle before measuring wheel zoom.
+    await hybridPage.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const hybridBefore = await hybridZoom();
     await hybridPage.locator('#map-viewport').dispatchEvent('wheel', { deltaY: -100, deltaMode: 0, clientX: 300, clientY: 300 });
     assert.ok(await hybridZoom() > hybridBefore, 'touch laptop retains embedded wheel zoom');

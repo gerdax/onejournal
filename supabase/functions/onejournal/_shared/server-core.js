@@ -349,14 +349,17 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
           if (access.role === "player" && (config.actor !== "hero" || request.heroId !== access.heroId)) fail(403, "Brak uprawnień do rzutu.");
           if (access.role === "player" && config.privateRoll === true) fail(403, "Rzuty graczy są publiczne.");
           if (access.role === "player" && !doc.state.heroes.some(h => h.id === access.heroId)) fail(403, "Brak dostępu do bohatera.");
-          const heroId = access.role === "player" ? access.heroId : null;
+          const boundHeroId = request.boundHeroId == null ? null : request.boundHeroId;
+          if (boundHeroId !== null && (typeof boundHeroId !== "string" || !boundHeroId || boundHeroId.length > 100)) fail(400, "Nieprawidłowy bohater rzutu.");
+          if (boundHeroId && (access.role !== "gm" || config.actor !== "hero" || enemyId)) fail(403, "Rzut przypisanego bohatera może wykonać tylko MG w trybie bohatera.");
+          const heroId = access.role === "player" ? access.heroId : boundHeroId;
           let interpretation;
           try { interpretation = DiceRules.interpretRoll(config, request.raw); } catch (error) { fail(400, error.message); }
           const rawDice = { feat: request.raw.feat.slice(), success: request.raw.success.slice() };
-          // Keep the request's legacy GM heroId in the idempotency key even though
-          // newly stored GM hero rolls are generic and do not bind a sheet.
+          // Legacy GM heroId remains generic; only explicit boundHeroId binds a sheet.
+          // Preserve old payloads so retries from earlier clients still match.
           const payloadHeroId = access.role === "player" ? heroId : request.heroId || null;
-          const payload = JSON.stringify({ heroId: payloadHeroId, config, raw: rawDice, ...(enemyId ? { enemyId } : {}) });
+          const payload = JSON.stringify({ heroId: payloadHeroId, config, raw: rawDice, ...(enemyId ? { enemyId } : {}), ...(boundHeroId ? { boundHeroId } : {}) });
           const prior = doc.rolls.find(r => r.id === request.id);
           if (prior) {
             if (prior.uid !== uid || prior.payload !== payload) fail(409, "ID rzutu jest już użyte.");
@@ -366,23 +369,24 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
           if (doc.rolls.length >= MAX_ROLLS) fail(409, "Dziennik osiągnął limit 10 000 rzutów. Wyeksportuj kopię przed dalszą grą.");
           const hero = heroId ? doc.state.heroes.find(h => h.id === heroId) : null;
           const enemy = enemyId ? doc.state.battle.find(e => e.id === enemyId) : null;
+          if (boundHeroId && !hero) fail(409, "Bohater został usunięty. Otwórz panel kości ponownie.");
           if (enemyId && !enemy) fail(409, "Przeciwnik zniknął z potyczki. Otwórz panel kości ponownie.");
           if (enemy && config.enemyResource) {
             if (enemy.hate < 1) fail(409, "Brak Nienawiści lub Determinacji — nie zapisano rzutu ani nie wydano zasobu.");
             enemy.hate -= 1;
           }
-          if (access.role === "player" && config.hope) {
-            if (!hero || hero.hope < 1) fail(409, "Brak Nadziei — nie zapisano rzutu ani nie wydano zasobu.");
+          if (hero && config.hope) {
+            if (hero.hope < 1) fail(409, "Brak Nadziei — nie zapisano rzutu ani nie wydano zasobu.");
             hero.hope -= 1;
             doc.heroVersions[heroId] = (doc.heroVersions[heroId] || 0) + 1;
           }
           const createdAt = now();
           const heroName = hero ? hero.name : null;
-          const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? enemy?.name || "Przeciwnik" : heroName || (access.role === "gm" ? "MG" : "Bohater");
+          const name = config.actor === "npc" ? "NPC" : config.actor === "enemy" ? enemy?.name || "MG" : heroName || (access.role === "gm" ? "MG" : "Bohater");
           const visibility = rollVisibility(config, access.role);
           const entry = { id: request.id, heroId, heroName, ...(enemyId ? { enemyId } : {}), name, actor: config.actor, authorRole: access.role, config, visibility, raw: rawDice, result: interpretation, createdAt, at: createdAt };
           doc.rolls.push({ id: request.id, uid, payload, visibility, entry });
-          publicChange = visibility === "public";
+          publicChange = visibility === "public" || !!(hero && config.hope);
         } else fail(400, "Nieznane działanie.");
       }
       doc.revision = expected + 1;

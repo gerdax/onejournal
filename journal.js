@@ -56,7 +56,7 @@
   }
   function title(entry) {
     const name = entry.heroName || entry.name || (entry.actor === 'enemy' ? 'Przeciwnik' : entry.actor === 'npc' ? 'NPC' : 'Bohater');
-    return (entry.authorRole === 'gm' && entry.actor === 'hero' && entry.heroId ? 'MG za ' : '') + name + (isPrivate(entry) ? ' (Priv)' : '');
+    return name + (isPrivate(entry) ? ' (Priv)' : '');
   }
   function resultSuffix(result) {
     const interpretation = verdict(result);
@@ -141,10 +141,13 @@
       throw error;
     } finally { publishing.delete(id); render(); }
   }
-  function prepare(config, heroId, enemyId) {
+  function prepare(config, heroId, enemyId, boundHeroId) {
     if (!store.canWrite) throw new Error('Brak połączenia — rzut jest zablokowany.');
     if (enemyId != null && (store.access.role !== 'gm' || config.actor !== 'enemy' || typeof enemyId !== 'string'))
       throw new Error('Wybrany przeciwnik może rzucać tylko jako MG.');
+    if (boundHeroId != null && (store.access.role !== 'gm' || config.actor !== 'hero' || enemyId != null || typeof boundHeroId !== 'string' || !boundHeroId))
+      throw new Error('Wybrany bohater może rzucać tylko jako MG w trybie bohatera.');
+    if (boundHeroId && !store.getState().heroes.some(h => h.id === boundHeroId)) throw new Error('Wybrany bohater został usunięty.');
     if (store.access.role === 'player') {
       if (config.actor !== 'hero') throw new Error('Gracz może rzucać tylko swoim bohaterem.');
       heroId = store.access.heroId;
@@ -152,7 +155,7 @@
     if (store.access.role === 'player' && !store.getState().heroes.some(h => h.id === heroId)) throw new Error('Brak przypisanego bohatera.');
     if (store.access.role === 'gm') heroId = null;
     return { id: crypto.randomUUID(), rollEpoch: store.rollEpoch, heroId: config.actor === 'hero' ? heroId : null,
-      ...(enemyId ? { enemyId } : {}), config: { ...config } };
+      ...(enemyId ? { enemyId } : {}), ...(boundHeroId ? { boundHeroId } : {}), config: { ...config } };
   }
   function capture(prepared, raw) {
     const entry = { ...prepared, raw: JSON.parse(JSON.stringify(raw)) };
