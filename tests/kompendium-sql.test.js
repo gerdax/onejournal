@@ -23,7 +23,7 @@ test('Kompendium SQL: permissions, activation, retrieval, tickets and durable ac
       insert into onejournal_private.access_links values('gm','gm',null,1,true),('player','player','hero',1,true);
       insert into onejournal_private.grants values('${gm}','gm','gm',null,1,true),('${player}','player','player','hero',1,true);`);
     await db.exec(await fs.readFile(require('node:path').join(__dirname, '../supabase/migrations/202610010001_kompendium.sql'), 'utf8'));
-    await db.exec(await fs.readFile(require('node:path').join(__dirname, '../supabase/migrations/202610020001_kompendium_resume.sql'), 'utf8'));
+    await db.exec(await fs.readFile(require('node:path').join(__dirname, '../supabase/migrations/202610010002_kompendium_resume.sql'), 'utf8'));
     await db.exec(await fs.readFile(require('node:path').join(__dirname, '../supabase/migrations/202610020002_kompendium_retrieval.sql'), 'utf8'));
     await db.exec(await fs.readFile(require('node:path').join(__dirname, '../supabase/migrations/202610030001_kompendium_neighbors.sql'), 'utf8'));
     await db.exec(await fs.readFile(require('node:path').join(__dirname, '../supabase/migrations/202610030002_kompendium_neighbor_clusters.sql'), 'utf8'));
