@@ -99,19 +99,28 @@
     const empty = dialog.querySelector('#map-library-empty');
     const errorBox = dialog.querySelector('#map-library-error');
     const jobs = new Map(), pendingActions = new Set();
-    let restoreFocus = openButton, libraryKey = null, sessionGeneration = 0;
+    let restoreFocus = openButton, libraryKey = null, sessionGeneration = 0, selectedId = null;
     function showError(error) { errorBox.textContent = errorText(error); errorBox.hidden = false; }
     function clearError() { errorBox.hidden = true; errorBox.textContent = ''; }
     function gm() { return store.access?.role === 'gm'; }
+    function selectCard(id) {
+      selectedId = id;
+      for (const card of grid.children) {
+        const selected = card.dataset.id === id;
+        card.classList.toggle('is-selected', selected);
+        card.querySelector('.map-library-preview').setAttribute('aria-pressed', String(selected));
+      }
+    }
     function refresh() {
       if (!gm()) {
-        sessionGeneration++;
+        sessionGeneration++; selectedId = null;
         grid.replaceChildren(); uploads.replaceChildren(); jobs.clear(); clearError(); libraryKey = null;
         if (dialog.open) dialog.close();
         return;
       }
       if (!dialog.open) return;
       const records = (store.getState().mapLibrary || []).slice().sort((a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt) || String(b.id).localeCompare(String(a.id)));
+      if (!records.some(record => record.id === selectedId)) selectedId = null;
       const nextKey = JSON.stringify([records, store.connection]);
       if (nextKey === libraryKey) return;
       libraryKey = nextKey;
@@ -140,6 +149,7 @@
         grid.append(card);
         getImage(store, record.thumbnailId).then(dataUrl => { if (card.isConnected && card.dataset.id === record.id) image.src = dataUrl; }).catch(() => { if (card.isConnected) { preview.textContent = 'Nie można wczytać miniatury'; libraryKey = null; } });
       }
+      selectCard(selectedId);
       if (focusedId && focusedAction) {
         const replacement = [...grid.querySelectorAll('[data-action]')].find(button => button.closest('[data-id]').dataset.id === focusedId && button.dataset.action === focusedAction);
         (replacement || addButton).focus();
@@ -222,7 +232,9 @@
     }
     grid.addEventListener('click', event => {
       const remove = event.target.closest('[data-action="remove"]');
-      if (remove) act(remove, 'remove');
+      if (remove) { act(remove, 'remove'); return; }
+      const card = event.target.closest('.map-library-card');
+      if (card) selectCard(card.dataset.id);
     });
     grid.addEventListener('dblclick', event => {
       const preview = event.target.closest('.map-library-preview');

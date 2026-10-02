@@ -72,6 +72,12 @@ async function main() {
   assert.equal(await dialog.locator('h3').count(),0);
   assert.equal(await dialog.getByRole('button',{name:'Wczytaj do potyczki',exact:true}).count(),0);
   await dialog.locator('.map-library-preview').first().click();
+  assert.equal(await dialog.locator('.map-library-card.is-selected').count(),1);
+  assert.equal(await dialog.locator('.map-library-preview').first().getAttribute('aria-pressed'),'true');
+  await dialog.locator('.map-library-preview').nth(1).click();
+  assert.equal(await dialog.locator('.map-library-card.is-selected').count(),1);
+  assert.equal(await dialog.locator('.map-library-preview').first().getAttribute('aria-pressed'),'false');
+  assert.equal(await dialog.locator('.map-library-preview').nth(1).getAttribute('aria-pressed'),'true');
   assert.equal(await dialog.isVisible(),true,'single click does not publish');
   assert.deepEqual((await state(gm)).map,original.map);
   await dialog.locator('.map-library-preview').first().dblclick();
