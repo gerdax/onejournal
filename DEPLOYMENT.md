@@ -36,3 +36,9 @@ Darmowy Supabase może wstrzymać projekt przy dłuższej nieaktywności. Przed 
 ## Przeniesienie do innego środowiska
 
 Odtwórz migracje w nowej bazie, ustaw oddzielne sekrety i nowy link MG, wgraj eksport JSON i sprawdź zgodność bohaterów, mapy oraz historii. Po potwierdzeniu wstrzymaj edycję starej gry, wykonaj końcowy eksport, import do nowego środowiska i przełącz konfigurację frontendu. Stare dane zachowaj do odbioru migracji. Zmiana dostawcy bez Supabase wymaga adaptera odpowiadającego kontraktowi `cloud-store.js` oraz serwera z tymi samymi kontrolami dostępu.
+
+## Biblioteka map
+
+Przed publikacją frontendu biblioteki map zastosuj migrację `202610020001_map_library.sql`, uruchom `node scripts/admin-build.mjs` i wdróż Edge Function. Nowy backend nadal obsługuje stare mapy generatora. Bucket `onejournal-maps` jest prywatny; tylko funkcja Edge odczytuje obrazy po sprawdzeniu dostępu. Gracze mogą pobrać wyłącznie obraz aktualnej potyczki.
+
+Usunięcie mapy z biblioteki nie usuwa aktywnego tła ani fizycznych obiektów Storage. Obrazy pozostają niezmienne; automatyczne czyszczenie nie jest częścią tej aktualizacji. Kopie gry obejmują bibliotekę oraz obraz aktywnej mapy, również po usunięciu wpisu z biblioteki. Sprawdź import wyłącznie na izolowanych danych.

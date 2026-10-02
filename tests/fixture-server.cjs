@@ -36,7 +36,12 @@ async function startFixture() {
     get: async id => avatarFiles.get(id) || null,
     put: async (id, dataUrl) => { avatarFiles.set(id, dataUrl); }
   };
-  const core = createServerCore({ repository, avatarStorage, hashSecret: hash, randomSecret: () => 'fixture-random-secret-' + crypto.randomBytes(12).toString('hex'), encryptSecret: value => value, decryptSecret: value => value, catalog });
+  const mapFiles = new Map();
+  const mapStorage = {
+    get: async id => mapFiles.get(id) || null,
+    put: async (id, dataUrl) => { mapFiles.set(id, dataUrl); }
+  };
+  const core = createServerCore({ repository, avatarStorage, mapStorage, hashSecret: hash, randomSecret: () => 'fixture-random-secret-' + crypto.randomBytes(12).toString('hex'), encryptSecret: value => value, decryptSecret: value => value, catalog });
   const offline = new Set();
   let userSequence = 0;
   const send = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };

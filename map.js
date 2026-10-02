@@ -272,11 +272,8 @@
   let touchLocked = false, touchGesture = null, touchToken = null, suppressTouchClick = false;
   const el = (tag, className, textValue) => { const node = doc.createElement(tag); if (className) node.className = className; if (textValue != null) node.textContent = textValue; return node; };
   const svg = (tag, attrs, parent) => { const node = doc.createElementNS(SVG, tag); Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value))); if (parent) parent.appendChild(node); return node; };
-  section.innerHTML = '<div class="section-heading map-heading"><h2>Potyczka</h2><div class="map-heading-actions"><button type="button" class="text-button" id="map-add-heroes">Dodaj bohaterów</button><button type="button" class="text-button" id="map-clear">Wyczyść potyczkę</button></div></div><div class="map-toolbar paper"><label>Sceneria<select id="map-scene"></select></label><label>Rozmiar<select id="map-size"><option value="small">Mały</option><option value="medium" selected>Średni</option><option value="large">Duży</option></select></label><button class="primary" id="map-generate" type="button">Wygeneruj mapę</button></div><p class="map-error" id="map-error" role="alert" hidden></p><div class="map-layout"><div class="map-viewport" id="map-viewport" aria-label="Mapa starcia"><div class="map-stage" id="map-stage"><svg id="map-terrain" aria-hidden="true"></svg><div id="map-tokens"></div></div><div class="map-blank" id="map-blank"><span>✦</span><p>Wybierz scenerię i rozmiar, aby utworzyć mapę.</p></div><div class="map-zoom-controls map-fullscreen-controls"><button type="button" id="map-fullscreen" aria-label="Rozwiń mapę na całe okno" title="Rozwiń mapę na całe okno" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div><div class="map-zoom-controls map-center-controls"><button type="button" id="map-center" aria-label="Wyśrodkuj na aktywnej postaci" title="Wyśrodkuj na aktywnej postaci" disabled><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/></svg></button></div><div class="map-zoom-controls" role="group" aria-label="Powiększenie mapy"><button type="button" id="map-fit">Dopasuj</button><button type="button" id="map-zoom-out" aria-label="Pomniejsz mapę">−</button><button type="button" id="map-zoom-in" aria-label="Powiększ mapę">+</button></div></div><aside class="map-panel paper" id="map-panel" aria-live="polite"></aside></div>';
-  const sceneInput = doc.getElementById('map-scene'), sizeInput = doc.getElementById('map-size');
-  for (const [value, label] of Object.entries(SCENES)) { const option = doc.createElement('option'); option.value = value; option.textContent = label; sceneInput.appendChild(option); }
-  sceneInput.value = 'clearing';
-  const generateButton = doc.getElementById('map-generate'), viewport = doc.getElementById('map-viewport'), stage = doc.getElementById('map-stage');
+  section.innerHTML = '<div class="section-heading map-heading"><h2>Potyczka</h2><div class="map-heading-actions"><button type="button" class="text-button" id="map-add-heroes">Dodaj bohaterów</button><button type="button" class="text-button" id="map-clear">Wyczyść potyczkę</button></div></div><div class="map-toolbar paper"><button class="primary" id="map-library-open" type="button" aria-haspopup="dialog">Biblioteka map</button></div><p class="map-error" id="map-error" role="alert" hidden></p><div class="map-layout"><div class="map-viewport" id="map-viewport" aria-label="Mapa starcia"><div class="map-stage" id="map-stage"><svg id="map-terrain" aria-hidden="true"></svg><div id="map-tokens"></div></div><div class="map-blank" id="map-blank"><span>✦</span><p>Wybierz scenerię, by utworzyć potyczkę.</p></div><div class="map-zoom-controls map-fullscreen-controls"><button type="button" id="map-fullscreen" aria-label="Rozwiń mapę na całe okno" title="Rozwiń mapę na całe okno" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div><div class="map-zoom-controls map-center-controls"><button type="button" id="map-center" aria-label="Wyśrodkuj na aktywnej postaci" title="Wyśrodkuj na aktywnej postaci" disabled><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/></svg></button></div><div class="map-zoom-controls" role="group" aria-label="Powiększenie mapy"><button type="button" id="map-fit">Dopasuj</button><button type="button" id="map-zoom-out" aria-label="Pomniejsz mapę">−</button><button type="button" id="map-zoom-in" aria-label="Powiększ mapę">+</button></div></div><aside class="map-panel paper" id="map-panel" aria-live="polite"></aside></div>';
+  const viewport = doc.getElementById('map-viewport'), stage = doc.getElementById('map-stage');
   const terrainSvg = doc.getElementById('map-terrain'), tokens = doc.getElementById('map-tokens'), panel = doc.getElementById('map-panel'), blank = doc.getElementById('map-blank'), errorBox = doc.getElementById('map-error');
   async function run(action) { if (!canSave()) { errorBox.textContent = 'Brak połączenia lub uprawnień do zapisu.'; errorBox.hidden = false; return false; } try { await action(); errorBox.hidden = true; return true; } catch (error) { errorBox.textContent = error && error.message ? error.message : 'Nie udało się zapisać zmiany mapy.'; errorBox.hidden = false; return false; } }
   function shape(record, parent) {
@@ -300,6 +297,7 @@
     terrainSvg.replaceChildren();
     terrainSvg.setAttribute('viewBox', `0 0 ${map.width} ${map.height}`);
     terrainSvg.setAttribute('width', map.width); terrainSvg.setAttribute('height', map.height);
+    if (map.kind === 'image') return;
     const scene = SCENES[map.scene] ? map.scene : 'clearing';
     svg('rect', { width: map.width, height: map.height, fill: { forest: '#a2aa80', forest_clearing: '#a2aa80', forest_crossroads: '#a2aa80', road: '#aaad87', river: '#a7ae89', river_ford: '#a7ae89', marsh: '#899b7d', ravine: '#9b9986', clearing: '#b9bd91', ruins: '#afa997', cave: '#777a71' }[scene] }, terrainSvg);
     const rng = randomFor(map.seed + '-ground');
@@ -553,23 +551,23 @@
   function refresh(snapshot) {
     const map = snapshot.map, participants = store.getParticipants();
     selected = pendingSelection !== undefined ? pendingSelection : viewSelection();
-    const key = map ? JSON.stringify([map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
+    const key = map ? JSON.stringify(map.kind === 'image' ? [map.kind, map.imageId, map.width, map.height] : [map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
     const terrainChanged = key !== fittedKey;
     if (terrainChanged) { gesture = null; touchPoints.clear(); touchGesture = null; touchToken = null; touchLocked = false; }
     currentMap = map;
     blank.hidden = !!map; stage.hidden = !map;
     if (isPlayer()) blank.querySelector('p').textContent = 'Mistrz gry nie przygotował jeszcze scenerii.';
-    generateButton.textContent = 'Wygeneruj mapę'; generateButton.disabled = !!store.loadError || isPlayer() || !canSave();
+    doc.getElementById('map-library-open').disabled = !!store.loadError || isPlayer();
     section.querySelector('.map-heading-actions').hidden = isPlayer();
     section.querySelector('.map-toolbar').hidden = isPlayer();
     if (store.loadError) { errorBox.textContent = 'Nie można zapisać mapy: zapisane dane są uszkodzone. Przywróć poprawną kopię zapasową.'; errorBox.hidden = false; }
     if (map) {
-      if (terrainChanged) { sceneInput.value = SCENES[map.scene] ? map.scene : 'clearing'; sizeInput.value = SIZES[map.size] ? map.size : 'medium'; }
       stage.style.width = map.width + 'px'; stage.style.height = map.height + 'px';
       if (terrainChanged) { paintTerrain(map); fittedKey = key; root.requestAnimationFrame(fit); }
+      root.OneRingMapLibrary?.showActiveImage(map, terrainSvg, store);
       if (touchToken && !terrainChanged) paintSelectedMarkers();
       else renderTokens(map, participants);
-    } else { fittedKey = ''; tokens.replaceChildren(); }
+    } else { fittedKey = ''; tokens.replaceChildren(); root.OneRingMapLibrary?.showActiveImage(null, terrainSvg, store); }
     renderPanel(participants);
   }
   doc.getElementById('map-add-heroes').addEventListener('click', () => run(async () => {
@@ -582,11 +580,7 @@
   doc.getElementById('map-clear').addEventListener('click', () => {
     if (root.confirm('Wyczyścić potyczkę? Mapa i wszyscy uczestnicy zostaną usunięci z potyczki. Arkusze bohaterów i biblioteka pozostaną zachowane.')) run(() => store.clearEncounter());
   });
-  generateButton.addEventListener('click', () => {
-    if (currentMap && store.getParticipants().length > 0 && !root.confirm('Wygenerować nową mapę? Rozstawienie znaczników zostanie wyzerowane.')) return;
-    const seed = root.crypto && root.crypto.getRandomValues ? root.crypto.getRandomValues(new Uint32Array(2)).join('-') : String(Date.now()) + '-' + Math.random();
-    run(() => store.setMap(generateTerrain(sceneInput.value, sizeInput.value, seed)));
-  });
+  root.OneRingMapLibrary?.init({ store, openButton: doc.getElementById('map-library-open') });
   doc.getElementById('map-zoom-in').addEventListener('click', () => zoomAt(1.25));
   doc.getElementById('map-zoom-out').addEventListener('click', () => zoomAt(.8));
   doc.getElementById('map-fit').addEventListener('click', fit);

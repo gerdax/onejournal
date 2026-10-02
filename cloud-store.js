@@ -6,10 +6,10 @@
 })(typeof window === 'undefined' ? null : window, function () {
   'use strict';
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
-  const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'setEnemyWeary', 'setEnemyNotes', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'restoreBackup', 'selectToken'];
+  const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'setEnemyWeary', 'setEnemyNotes', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'removeMap', 'loadMap', 'restoreBackup', 'selectToken'];
   function createStore(transport) {
     let snapshot = null, connection = 'connecting', listeners = new Set(), tail = Promise.resolve(), refreshing, stopped = false, epoch = 0;
-    const empty = { version: 2, library: [], battle: [], heroes: [], heroParticipants: [], map: null };
+    const empty = { version: 2, library: [], battle: [], heroes: [], heroParticipants: [], mapLibrary: [], map: null };
     function emit() { for (const fn of listeners) { try { fn(store.getState()); } catch (error) { console.error('State observer failed', error); } } }
     function accept(data) {
       if (!data || !data.state || !data.access) throw new Error('Nieprawidłowa odpowiedź serwera.');
@@ -30,9 +30,12 @@
       } catch (error) { if (!error.stale && epoch === startedEpoch) failed(error); throw error; }
     }
     function assertWritable() { if (!store.canWrite) throw new Error('Brak połączenia. Zaczekaj na synchronizację.'); }
+    function staleSession() { const error = new Error('Sesja zmieniła się podczas żądania.'); error.stale = true; return error; }
     function enqueue(body, apply = false) {
       try { assertWritable(); } catch (error) { return Promise.reject(error); }
+      const queuedEpoch = epoch;
       const run = tail.then(async () => {
+        if (epoch !== queuedEpoch || stopped) throw staleSession();
         assertWritable();
         try {
           const response = await request(body);
@@ -77,6 +80,10 @@
       stop() { epoch++; stopped = true; transport.stop?.(); connection = 'offline'; emit(); },
       exportBackup() { return enqueue({ action: 'export' }); },
       getAvatar(heroId) { return enqueue({ action: 'avatarGet', heroId }); },
+      uploadMap({ id, name, dataUrl, thumbnailDataUrl }) {
+        return enqueue({ action: 'mapUpload', id, name, dataUrl, thumbnailDataUrl }, true).then(response => clone(response.result));
+      },
+      getMapImage(imageId) { return enqueue({ action: 'mapGet', imageId }); },
       setAvatar(heroId, dataUrl, heroVersion) {
         return enqueue({ action: 'avatarSet', heroId, dataUrl: dataUrl || null,
           heroVersion: heroVersion ?? snapshot?.heroVersions?.[heroId] ?? 0 }, true).then(response => clone(response.result));
@@ -95,13 +102,27 @@
       store[method] = (...args) => {
         if (method === 'restoreBackup' && args[0]?.format === 'onejournal' && args[0].version === 2) {
           return (async () => {
+            const restoreEpoch = epoch;
+            const assertRestoreSession = () => { if (epoch !== restoreEpoch || stopped) throw staleSession(); };
             const backup = clone(args[0]);
             if (!backup.avatars || typeof backup.avatars !== 'object' || Array.isArray(backup.avatars)) throw new Error('Nieprawidłowy spis portretów.');
             for (const [id, dataUrl] of Object.entries(backup.avatars)) {
+              assertRestoreSession();
               const staged = await enqueue({ action: 'avatarStage', dataUrl });
               if (staged.avatarId !== id) throw new Error('Portret w kopii nie pasuje do identyfikatora.');
               backup.avatars[id] = null;
             }
+            if (Object.hasOwn(backup, 'maps')) {
+              if (!backup.maps || typeof backup.maps !== 'object' || Array.isArray(backup.maps)) throw new Error('Nieprawidłowy spis map.');
+              const thumbnailIds = new Set((backup.state?.mapLibrary || []).map(m => m.thumbnailId));
+              for (const [id, dataUrl] of Object.entries(backup.maps)) {
+                assertRestoreSession();
+                const staged = await enqueue({ action: 'mapStage', dataUrl, thumbnail: thumbnailIds.has(id) });
+                if (staged.imageId !== id) throw new Error('Mapa w kopii nie pasuje do identyfikatora.');
+                backup.maps[id] = null;
+              }
+            }
+            assertRestoreSession();
             return enqueue({ action: 'command', method, args: [backup] }, true).then(response => clone(response.result));
           })();
         }
