@@ -2,3 +2,6 @@ project_id = "onejournal"
 
 [functions.onejournal]
 verify_jwt = true
+
+[functions.kompendium]
+verify_jwt = false

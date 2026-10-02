@@ -1,0 +1,8 @@
+:root { color-scheme: light; font-family: Manrope, system-ui, sans-serif; color: #29251f; background: #eee8db; }
+body { margin: 0; }
+header { background: #f4f0e8; padding: 12px 20px; border-bottom: 1px solid #b7aa94; display: flex; align-items: baseline; flex-wrap: wrap; gap: 16px; }
+h1 { margin: 0; font-size: 1.2rem; } #status { font-size: .9rem; }
+nav { background: #f4f0e8; padding: 10px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-bottom: 1px solid #b7aa94; }
+button, input, select { font: inherit; min-height: 34px; } input { width: 65px; }
+main { overflow: auto; height: calc(100dvh - 125px); text-align: center; padding: 16px; box-sizing: border-box; }
+canvas { display: block; margin: auto; background: white; box-shadow: 0 3px 12px #0004; max-width: none; }

@@ -16,6 +16,10 @@
     }
     async function fetchJSON(url, options) {
       const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+      const externalSignal = options?.signal;
+      if (externalSignal?.aborted) controller.abort();
+      const abort = () => controller.abort();
+      externalSignal?.addEventListener('abort', abort, { once: true });
       try {
         const response = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
         const body = await response.json().catch(() => ({}));
@@ -24,7 +28,7 @@
           error.status = response.status; throw error;
         }
         return body;
-      } finally { clearTimeout(timer); }
+      } finally { clearTimeout(timer); externalSignal?.removeEventListener('abort', abort); }
     }
     async function authenticate(force = false) {
       if (!force && session?.access_token && session.expires_at > Date.now() / 1000 + 60) return;
@@ -57,6 +61,64 @@
         return edge(body);
       }
     }
+    async function compendium(body, { signal, onEvent } = {}) {
+      await authenticate();
+      const streaming = body?.action === 'ask';
+      async function perform() {
+        const response = await fetch(base + '/functions/v1/kompendium', {
+          method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + session.access_token,
+            'Content-Type': 'application/json', ...(streaming ? { Accept: 'text/event-stream' } : {}) },
+          body: JSON.stringify(body), signal, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer'
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          const error = new Error(payload.error || payload.message || 'Serwer odrzucił żądanie.');
+          error.status = response.status; throw error;
+        }
+        if (!streaming) return response.json();
+        if (!response.body) throw new Error('Brak strumienia odpowiedzi.');
+        const reader = response.body.getReader(), decoder = new TextDecoder();
+        let pending = '', complete = false, result;
+        function parseBlock(block) {
+          let type = 'message', data = '';
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event:')) type = line.slice(6).trim();
+            else if (line.startsWith('data:')) data += (data ? '\n' : '') + line.slice(5).trimStart();
+          }
+          if (!data) return;
+          const payload = JSON.parse(data);
+          if (type === 'error') throw new Error(payload.error || 'Nie udało się uzyskać odpowiedzi.');
+          onEvent?.(type, payload);
+          if (type === 'done') { complete = true; result = payload; }
+        }
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            pending += decoder.decode(value, { stream: true });
+            let match;
+            while ((match = /\r?\n\r?\n/.exec(pending))) {
+              parseBlock(pending.slice(0, match.index).replace(/\r\n/g, '\n'));
+              pending = pending.slice(match.index + match[0].length);
+            }
+          }
+          pending += decoder.decode();
+          if (pending.trim()) parseBlock(pending.replace(/\r\n/g, '\n'));
+        } finally { reader.releaseLock(); }
+        if (!complete) throw new Error('Odpowiedź została przerwana. Spróbuj ponownie.');
+        return result;
+      }
+      // A 401 before the stream opens is safe to retry; a started answer is never replayed.
+      try { return await perform(); }
+      catch (error) {
+        if (error.status !== 401 || signal?.aborted) throw error;
+        await authenticate(true); return perform();
+      }
+    }
+    async function redeem(ticket, { signal } = {}) {
+      return fetchJSON(base + '/functions/v1/kompendium', { method: 'POST',
+        headers: { apikey: key, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'redeem', ticket }), signal });
+    }
     const topic = 'realtime:onejournal';
     function send(event, payload, channel = topic) {
       if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ topic: channel, event, payload, ref: String(++sequence), join_ref: channel === topic ? '1' : undefined }));
@@ -86,6 +148,7 @@
     }
     return {
       request,
+      compendium, redeem,
       start(callback) { stop(); stopped = false; onChange = callback; connectSocket(); poll = setInterval(callback, 5000); },
       stop,
       clearSession() { stop(); session = null; sessionStorage.removeItem(storageKey); }

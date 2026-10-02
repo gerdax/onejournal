@@ -6,7 +6,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(root, 'dist');
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-const files = ['index.html','config.js','state.js','cloud-store.js','supabase-adapter.js','bootstrap.js','avatars.js','heroes.js','map.js','app.js','dice-rules.js','dice-engine.js','dice-roller.js','journal.js','notebook.js','settings.js','style.css','overrides.css','heroes.css','map.css','dice-roller.css','online.css','notebook.css','manifest.webmanifest','service-worker.js','icons','vendor'];
+const files = ['index.html','config.js','state.js','cloud-store.js','supabase-adapter.js','bootstrap.js','avatars.js','heroes.js','map.js','app.js','dice-rules.js','dice-engine.js','dice-roller.js','journal.js','notebook.js','settings.js','style.css','overrides.css','heroes.css','map.css','dice-roller.css','online.css','notebook.css','kompendium.js','kompendium.css','reader.html','reader.js','reader.css','manifest.webmanifest','service-worker.js','icons','vendor'];
 for (const path of files) await cp(resolve(root,path), resolve(output,path), { recursive: true, filter: source => !source.endsWith('.DS_Store') });
 await writeFile(resolve(output,'.nojekyll'), '');
 console.log('Public application prepared in dist/');

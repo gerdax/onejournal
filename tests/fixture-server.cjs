@@ -12,7 +12,7 @@ const gmSecret = 'fixture-gm-access-secret-00001';
 const playerSecrets = ['fixture-player-access-secret-01', 'fixture-player-access-secret-02'];
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const copy = value => structuredClone(value);
-const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
 async function startFixture() {
   const storage = { getItem: () => null, setItem: () => {} };
@@ -70,6 +70,7 @@ async function startFixture() {
     secrets: { gm: gmSecret, players: playerSecrets }, heroes,
     get document() { return copy(doc); },
     core,
+    revokeGM() { const link = doc.links.find(item => item.role === 'gm'); link.active = false; link.version++; },
     setOffline(uid, value) { if (value) offline.add(uid); else offline.delete(uid); },
     close: () => new Promise(resolve => server.close(resolve))
   };
