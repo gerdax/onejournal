@@ -148,7 +148,7 @@
 .map-library-drop.is-dragging { border-color: var(--clay); background: #f5e6d7; }
 
 .map-library-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.map-library-help { margin: 8px 0 20px; color: var(--muted); font-size: 12px; }
+.map-library-help { margin: 8px 0 20px; color: var(--muted); font-size: 12px; text-align: center; }
 .map-library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 18px; }
 .map-library-card { min-width: 0; padding: 10px; border: 1px solid #cec2ad; border-radius: 8px; background: #fffdf8; }
 .map-library-preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1; overflow: hidden; background: #ddd1b8; color: #685f52; font-size: 13px; text-align: center; }
