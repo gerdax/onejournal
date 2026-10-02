@@ -1,0 +1,26 @@
+.kompendium-dialog { color: #29251f; background: #f4f0e8; border: 1px solid #b7aa94; border-radius: 12px; padding: 0; width: min(960px, 88vw); height: 82dvh; max-height: 90dvh; overflow: hidden; }
+.kompendium-dialog[open] { display: flex; flex-direction: column; }
+.kompendium-dialog::backdrop { background: #19171366; }
+.kompendium-dialog .journal-head { padding: 24px 28px; border-bottom: 1px solid #cfc6b4; }
+.kompendium-dialog .journal-close { width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font: 30px/1 Arial, sans-serif; cursor: pointer; }
+.kompendium-thread { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 20px 48px 40px; overflow-wrap: anywhere; }
+.kompendium-turn { margin: 0; line-height: 1.55; }
+.kompendium-turn > :first-child { margin-top: 0; }
+.kompendium-turn + .kompendium-turn { border-top: 1px solid #d8cebc; margin-top: 28px; padding-top: 24px; }
+.kompendium-prompt { font-weight: 700; }
+.kompendium-answer { white-space: pre-wrap; }
+.kompendium-sources { margin-top: 24px; font-size: .95rem; }
+.kompendium-sources a { color: #7d392c; display: inline-block; margin: 3px 5px; }
+.kompendium-caution, .kompendium-error { color: #943e2f; }
+.kompendium-form { display: grid; gap: 16px; flex: none; padding: 20px 28px; border-top: 1px solid #cfc6b4; }
+.kompendium-form label, .kompendium-key-hint { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.kompendium-form textarea { width: 100%; box-sizing: border-box; resize: vertical; height: 76px; min-height: 60px; max-height: 20dvh; padding: 10px; font: inherit; }
+.kompendium-form-foot { display: flex; gap: 10px; align-items: center; }
+.kompendium-status { flex: 1; font-size: .9rem; }
+.kompendium-form button { min-height: 40px; }
+.kompendium-usage { border-top: 1px solid #d8cebc; padding-top: 12px; }
+.kompendium-usage h3 { margin: 4px 0 10px; }
+.kompendium-usage table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+.kompendium-usage th, .kompendium-usage td { border-bottom: 1px solid #d8cebc; padding: 5px; text-align: right; }
+.kompendium-usage th:first-child { text-align: left; }
+@media (max-width: 600px) { .kompendium-dialog { width: 94vw; height: 88dvh; } .kompendium-dialog .journal-head { padding: 16px; } .kompendium-thread { padding: 12px 12px 32px 24px; } .kompendium-form { padding: 16px; gap: 12px; } }

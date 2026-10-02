@@ -12,3 +12,8 @@ node_modules/
 supabase/.temp/
 backups/
 *.secret
+
+# Private handbook extraction, reviews, evaluation results, and local preview config.
+private-kompendium/
+config.local.js
+docs/*.pdf

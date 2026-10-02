@@ -24,7 +24,10 @@ Frontend lokalny: `python3 -m http.server 8877`, adres `http://localhost:8877/`.
 
 ## Testy
 
+Przed pierwszym uruchomieniem testów wykonaj `npm ci --ignore-scripts` (Node 22.18+). Zależności służą importowi PDF, liczeniu tokenów historii na backendzie i izolowanym testom PostgreSQL; frontend nadal nie wymaga bundlera.
+
 - `node --test tests/*.test.js` — reguły, stan, uprawnienia, kopie i adapter chmurowy.
+- `NODE_PATH=<katalog-node_modules> node tests/kompendium-online.cjs` — popup MG, zużycie, strumieniowanie i prywatny czytnik PDF na izolowanych danych.
 - `node --check <zmieniony-plik.js>` — składnia.
 - `NODE_PATH=<katalog-node_modules> node tests/online.cjs` — izolowany serwer w pamięci i osobne przeglądarki MG/dwóch graczy.
 - `NODE_PATH=<katalog-node_modules> node tests/map-library-failures-online.cjs` — ponawianie uploadu, sortowanie, zachowanie fokusu i spóźnione odpowiedzi obrazów.
@@ -47,3 +50,7 @@ W Ustawieniach MG można eksportować pełną grę do JSON (`format: onejournal`
 onejournal nie odczytuje `localStorage` bestiary. Import danych jest jawny i nigdy nie usuwa starego zapisu. Przy publikacji obu aplikacji pod `gerdax.github.io` mają wspólny origin: nowy service worker czyści tylko własny cache, ale stary worker bestiary może usuwać cache innych aplikacji przy swojej aktywacji. Pełną izolację daje osobny origin. Nie otwieraj starych i nowych linków w tej samej karcie bez zakończenia sesji.
 
 Przenośny kontrakt opisuje [STATE_API.md](STATE_API.md), a warstwę serwerową [BACKEND.md](BACKEND.md). Dane mają własne identyfikatory. Reguły i model gry nie zależą od Supabase; przy zmianie dostawcy należy odtworzyć uwierzytelnianie, transakcje i powiadomienia oraz wykonać próbny import.
+
+## Kompendium MG
+
+Ikona runy otwiera sesyjny czat o zasadach. Odpowiedzi wskazują strony prywatnego podręcznika, a Ustawienia pokazują tokeny i szacunkowy koszt API. Moduł wymaga osobnej funkcji Edge i importu PDF. Instalację, ograniczenia i testy opisuje [KOMPENDIUM.md](KOMPENDIUM.md).

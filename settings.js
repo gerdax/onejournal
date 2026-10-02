@@ -31,7 +31,7 @@
   syncAvatarActions();
   document.getElementById('settings-open').onclick = () => {
     dialog.showModal(); dialog.querySelector('.journal-body').scrollTop = 0;
-    if (store.access.role === 'gm') render();
+    if (store.access.role === 'gm') { render(); renderUsage(); }
     syncAvatarActions();
   };
   document.getElementById('settings-close').onclick = () => dialog.close();
@@ -49,6 +49,42 @@
   dialog.addEventListener('pointercancel', () => { outsidePress = false; });
   if (store.access.role !== 'gm') return;
   const host = document.getElementById('access-links'), status = document.getElementById('settings-status');
+  const usageSection = document.getElementById('kompendium-usage'), usageBody = document.getElementById('kompendium-usage-body');
+  usageSection.hidden = false;
+  let usageGeneration = 0;
+  async function renderUsage() {
+    const token = ++usageGeneration;
+    usageBody.textContent = 'Ładowanie kosztów…';
+    try {
+      const result = await window.OneJournalCompendium.request({ action: 'usage' });
+      if (token !== usageGeneration || store.access.role !== 'gm' || store.connection === 'revoked') return;
+      const money = value => '$' + (Number(value) || 0).toFixed(4);
+      const number = value => (Number(value) || 0).toLocaleString('pl-PL');
+      const rows = [
+        ['Pytania', 'questions', number], ['Tokeny wejściowe', 'inputTokens', number],
+        ['Tokeny wejściowe z pamięci podręcznej', 'cachedInputTokens', number],
+        ['Tokeny wyjściowe', 'outputTokens', number], ['Koszt łączny', 'costUsd', money],
+        ['Indeksowanie', 'indexingCostUsd', money], ['Rozmowy', 'conversationCostUsd', money],
+        ['Niepełne żądania', 'incompleteRequests', number]
+      ];
+      const table = document.createElement('table');
+      const header = document.createElement('tr');
+      for (const text of ['Miara', 'Ten miesiąc', 'Cały okres']) { const cell = document.createElement('th'); cell.textContent = text; header.append(cell); }
+      table.append(header);
+      for (const [label, key, format] of rows) {
+        const row = document.createElement('tr');
+        for (const value of [label, format(result.month?.[key]), format(result.allTime?.[key])]) {
+          const cell = document.createElement(row.childElementCount ? 'td' : 'th'); cell.textContent = value; row.append(cell);
+        }
+        table.append(row);
+      }
+      const model = document.createElement('p'); model.textContent = 'Model: ' + (result.model || 'nieznany');
+      usageBody.replaceChildren(model, table);
+      if (Number(result.month?.incompleteRequests) || Number(result.allTime?.incompleteRequests)) {
+        const note = document.createElement('p'); note.textContent = 'Niepełne żądania mogły nadal wygenerować koszt.'; usageBody.append(note);
+      }
+    } catch (error) { if (token === usageGeneration && store.access.role === 'gm' && store.connection !== 'revoked') usageBody.textContent = error.message || 'Nie udało się pobrać kosztów.'; }
+  }
   let generation = 0;
   const el = (tag, text) => { const node = document.createElement(tag); if (text) node.textContent = text; return node; };
   async function copyLink(input) {
@@ -113,5 +149,5 @@
     catch (error) { status.textContent = error.message; }
     finally { host.querySelectorAll('button:not([data-avatar-remove])').forEach(button => { button.disabled = !store.canWrite; }); syncAvatarActions(); }
   }
-  store.subscribe(() => { if (store.access.role !== 'gm') host.replaceChildren(); host.querySelectorAll('button:not([data-avatar-remove])').forEach(button => { button.disabled = !store.canWrite; }); syncAvatarActions(); });
+  store.subscribe(() => { if (store.access.role !== 'gm' || store.connection === 'revoked') { host.replaceChildren(); usageGeneration++; usageBody.replaceChildren(); usageSection.hidden = true; } host.querySelectorAll('button:not([data-avatar-remove])').forEach(button => { button.disabled = !store.canWrite; }); syncAvatarActions(); });
 })();
