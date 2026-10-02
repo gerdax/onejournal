@@ -88,7 +88,7 @@
     const dialog = make('dialog', 'map-library-dialog');
     dialog.id = 'map-library-dialog';
     dialog.setAttribute('aria-labelledby', 'map-library-title');
-    dialog.innerHTML = '<div class="map-library-head"><h2 id="map-library-title">Biblioteka map</h2><button type="button" id="map-library-close" aria-label="Zamknij bibliotekę map">×</button></div><div class="map-library-body"><div class="map-library-drop" id="map-library-drop"><span>Przeciągnij mapy tutaj</span><button type="button" id="map-library-add" class="primary">Dodaj mapy</button><input id="map-library-files" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple hidden /></div><p class="map-library-help">JPG lub PNG, do 20 MiB i 40 megapikseli. Obraz zostanie przycięty do kwadratu.</p><div id="map-library-uploads" class="map-library-uploads" aria-live="polite"></div><p id="map-library-error" class="map-error" role="alert" hidden></p><div id="map-library-grid" class="map-library-grid"></div><p id="map-library-empty" class="map-library-empty">Biblioteka map jest pusta.</p></div>';
+    dialog.innerHTML = '<div class="map-library-head"><h2 id="map-library-title">Biblioteka map</h2><button type="button" id="map-library-close" aria-label="Zamknij bibliotekę map">×</button></div><div class="map-library-body"><div class="map-library-drop" id="map-library-drop"><span>Przeciągnij grafikę lub <button type="button" id="map-library-add" class="map-library-upload-link">kliknij tutaj</button></span><input id="map-library-files" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple hidden /></div><p class="map-library-help">JPG lub PNG, do 20 MiB i 40 megapikseli. Obraz zostanie przycięty do kwadratu.</p><div id="map-library-uploads" class="map-library-uploads" aria-live="polite"></div><p id="map-library-error" class="map-error" role="alert" hidden></p><div id="map-library-grid" class="map-library-grid"></div><p id="map-library-empty" class="map-library-empty">Biblioteka map jest pusta.</p></div>';
     doc.body.append(dialog);
     const closeButton = dialog.querySelector('#map-library-close');
     const fileInput = dialog.querySelector('#map-library-files');
@@ -98,7 +98,7 @@
     const grid = dialog.querySelector('#map-library-grid');
     const empty = dialog.querySelector('#map-library-empty');
     const errorBox = dialog.querySelector('#map-library-error');
-    const jobs = new Map();
+    const jobs = new Map(), pendingActions = new Set();
     let restoreFocus = openButton, libraryKey = null, sessionGeneration = 0;
     function showError(error) { errorBox.textContent = errorText(error); errorBox.hidden = false; }
     function clearError() { errorBox.hidden = true; errorBox.textContent = ''; }
@@ -126,22 +126,22 @@
         const image = make('img');
         image.alt = '';
         preview.append(image);
-        const name = make('h3', '', record.name);
+        preview.tabIndex = 0; preview.setAttribute('role', 'button');
+        preview.dataset.action = 'load';
+        preview.setAttribute('aria-label', 'Wczytaj mapę do potyczki');
+        preview.title = 'Kliknij dwukrotnie, aby wczytać mapę do potyczki';
         const date = make('p', 'map-library-date', Number.isFinite(Date.parse(record.uploadedAt)) ? new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(record.uploadedAt)) : '');
-        const actions = make('div', 'map-library-actions');
-        const load = make('button', 'primary', 'Wczytaj do potyczki');
-        load.type = 'button';
-        load.dataset.action = 'load';
+        const actions = make('div', 'map-library-meta');
         const remove = make('button', 'text-button', 'Usuń');
         remove.type = 'button';
         remove.dataset.action = 'remove';
-        actions.append(load, remove);
-        card.append(preview, name, date, actions);
+        actions.append(date, remove);
+        card.append(preview, actions);
         grid.append(card);
         getImage(store, record.thumbnailId).then(dataUrl => { if (card.isConnected && card.dataset.id === record.id) image.src = dataUrl; }).catch(() => { if (card.isConnected) { preview.textContent = 'Nie można wczytać miniatury'; libraryKey = null; } });
       }
       if (focusedId && focusedAction) {
-        const replacement = [...grid.querySelectorAll('button[data-action]')].find(button => button.closest('[data-id]').dataset.id === focusedId && button.dataset.action === focusedAction);
+        const replacement = [...grid.querySelectorAll('[data-action]')].find(button => button.closest('[data-id]').dataset.id === focusedId && button.dataset.action === focusedAction);
         (replacement || addButton).focus();
       }
     }
@@ -203,22 +203,44 @@
     for (const name of ['dragleave', 'drop']) dialog.addEventListener(name, event => { event.preventDefault(); drop.classList.remove('is-dragging'); });
     dialog.addEventListener('drop', event => queue(event.dataTransfer?.files || []));
     uploads.addEventListener('click', event => { const id = event.target.dataset.retry; if (id && jobs.has(id)) upload(jobs.get(id)); });
-    grid.addEventListener('click', async event => {
-      const button = event.target.closest('button[data-action]');
-      const card = button?.closest('[data-id]');
-      if (!button || !card || !gm()) return;
+    async function act(target, action) {
+      const card = target?.closest('.map-library-card');
+      if (!card || !gm() || pendingActions.has(card.dataset.id)) return;
       const id = card.dataset.id;
       const record = (store.getState().mapLibrary || []).find(item => item.id === id);
       if (!record) { refresh(); return; }
-      if (button.dataset.action === 'remove' && !root.confirm(`Usunąć mapę „${record.name}” z biblioteki?`)) return;
-      if (button.dataset.action === 'load' && store.getState().map && store.getParticipants().length && !root.confirm('Wczytać inną mapę? Rozstawienie znaczników zostanie wyzerowane.')) return;
-      clearError(); button.disabled = true;
+      if (action === 'remove' && !root.confirm(`Usunąć mapę „${record.name}” z biblioteki?`)) return;
+      if (action === 'load' && store.getState().map && store.getParticipants().length && !root.confirm('Wczytać inną mapę? Rozstawienie znaczników zostanie wyzerowane.')) return;
+      const generation = sessionGeneration;
+      clearError(); pendingActions.add(id); target.setAttribute('aria-disabled', 'true');
       try {
         if (!store.canWrite) throw new Error('Brak połączenia. Spróbuj ponownie po synchronizacji.');
-        if (button.dataset.action === 'load') { await store.loadMap(id); dialog.close(); }
+        if (action === 'load') { await store.loadMap(id); if (gm() && generation === sessionGeneration) dialog.close(); }
         else { await store.removeMap(id); refresh(); }
-      } catch (error) { showError(error); }
-      finally { button.disabled = false; }
+      } catch (error) { if (gm() && generation === sessionGeneration) showError(error); }
+      finally { pendingActions.delete(id); target.removeAttribute('aria-disabled'); }
+    }
+    grid.addEventListener('click', event => {
+      const remove = event.target.closest('[data-action="remove"]');
+      if (remove) act(remove, 'remove');
+    });
+    grid.addEventListener('dblclick', event => {
+      const preview = event.target.closest('.map-library-preview');
+      if (preview) act(preview, 'load');
+    });
+    grid.addEventListener('keydown', event => {
+      if (event.target.matches('.map-library-preview') && ['Enter', ' '].includes(event.key)) {
+        event.preventDefault(); if (!event.repeat) act(event.target, 'load');
+      }
+    });
+    let lastTap = null;
+    grid.addEventListener('pointerup', event => {
+      if (event.pointerType !== 'touch') return;
+      const preview = event.target.closest('.map-library-preview');
+      if (!preview) { lastTap = null; return; }
+      if (lastTap?.preview === preview && event.timeStamp - lastTap.time < 400 && Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) < 20) {
+        lastTap = null; event.preventDefault(); act(preview, 'load');
+      } else lastTap = { preview, time: event.timeStamp, x: event.clientX, y: event.clientY };
     });
     store.subscribe(refresh);
   }

@@ -31,8 +31,8 @@ async function main() {
   const gm=await open(fixture.secrets.gm), player=await open(fixture.secrets.players[0]);
   const original=await state(gm);
   assert.equal(await gm.locator('#map-generate').count(),0);
-  assert.equal(await player.getByRole('button',{name:'Biblioteka map',exact:true}).isVisible(),false);
-  await gm.getByRole('button',{name:'Biblioteka map',exact:true}).click();
+  assert.equal(await player.getByRole('button',{name:'Sceneria',exact:true}).isVisible(),false);
+  await gm.getByRole('button',{name:'Sceneria',exact:true}).click();
   const dialog=gm.getByRole('dialog',{name:'Biblioteka map',exact:true});
   await dialog.waitFor();
   const input=dialog.locator('input[type=file]');
@@ -67,9 +67,14 @@ async function main() {
   await gm.waitForFunction(()=>OneRingStore.getState().mapLibrary.length===3);
   await gm.keyboard.press('Escape');
   assert.equal(await dialog.isVisible(),false);
-  assert.equal(await gm.getByRole('button',{name:'Biblioteka map',exact:true}).evaluate(n=>n===document.activeElement),true);
-  await gm.getByRole('button',{name:'Biblioteka map',exact:true}).click();
-  await dialog.getByRole('button',{name:'Wczytaj do potyczki',exact:true}).first().click();
+  assert.equal(await gm.getByRole('button',{name:'Sceneria',exact:true}).evaluate(n=>n===document.activeElement),true);
+  await gm.getByRole('button',{name:'Sceneria',exact:true}).click();
+  assert.equal(await dialog.locator('h3').count(),0);
+  assert.equal(await dialog.getByRole('button',{name:'Wczytaj do potyczki',exact:true}).count(),0);
+  await dialog.locator('.map-library-preview').first().click();
+  assert.equal(await dialog.isVisible(),true,'single click does not publish');
+  assert.deepEqual((await state(gm)).map,original.map);
+  await dialog.locator('.map-library-preview').first().dblclick();
   await dialog.waitFor({state:'hidden'});
   const live=await state(gm);
   assert.equal(live.map.kind,'image'); assert.deepEqual([live.map.width,live.map.height],[1200,1200]);
@@ -97,7 +102,7 @@ async function main() {
   assert.ok(Math.abs(afterPan.x - beforePan.x - 40) < 2 && Math.abs(afterPan.y - beforePan.y - 30) < 2, 'image background drags like generated terrain');
   await gm.keyboard.press('Escape');
   // Backup restores all uploaded assets, including an active image removed from the library.
-  await gm.getByRole('button',{name:'Biblioteka map',exact:true}).click();
+  await gm.getByRole('button',{name:'Sceneria',exact:true}).click();
   await dialog.getByRole('button',{name:'Usuń',exact:true}).first().click();
   await gm.waitForFunction(()=>OneRingStore.getState().mapLibrary.length===2);
   assert.equal((await state(gm)).map.imageId,active);
@@ -111,13 +116,13 @@ async function main() {
   await gm.evaluate(value=>OneRingStore.restoreBackup(value),backup);
   assert.equal((await state(gm)).map.imageId,active);
   await gm.locator('#map-terrain image').waitFor();
-  await gm.getByRole('button',{name:'Biblioteka map',exact:true}).click();
+  await gm.getByRole('button',{name:'Sceneria',exact:true}).click();
   await gm.setViewportSize({width:390,height:844});
   assert.ok(await dialog.evaluate(n=>n.getBoundingClientRect().width<=innerWidth));
   await gm.screenshot({path:'/tmp/onejournal-map-library-mobile.png'});
   await gm.keyboard.press('Escape');
   await gm.setViewportSize({width:1280,height:900});
-  await gm.getByRole('button',{name:'Biblioteka map',exact:true}).click();
+  await gm.getByRole('button',{name:'Sceneria',exact:true}).click();
   await gm.screenshot({path:'/tmp/onejournal-map-library-desktop.png'});
   assert.deepEqual(errors,[]);
   console.log('PASS: map picker/drop, center crop, publication, role privacy, deletion, portable restore, mobile modal');

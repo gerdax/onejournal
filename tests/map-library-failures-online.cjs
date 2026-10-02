@@ -39,7 +39,8 @@ async function main() {
   await page.waitForTimeout(25);
   await input.setInputFiles(await png(page, 'newer.png'));
   await page.waitForFunction(() => OneRingStore.getState().mapLibrary.length === 2);
-  assert.equal(await page.locator('.map-library-card h3').first().textContent(), 'newer.png', 'latest server timestamp first');
+  const newestId = await page.evaluate(() => OneRingStore.getState().mapLibrary.find(m => m.name === 'newer.png').id);
+  assert.equal(await page.locator('.map-library-card').first().getAttribute('data-id'), newestId, 'latest server timestamp first');
   await page.locator('.map-library-card [data-action=load]').first().focus();
   await page.evaluate(() => OneRingStore.refresh());
   assert.equal(await page.locator('.map-library-card [data-action=load]').first().evaluate(n => n === document.activeElement), true, 'snapshot refresh preserves keyboard focus');
@@ -49,7 +50,7 @@ async function main() {
     if (body.action === 'mapGet' && failImage) { failImage = false; await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Obraz chwilowo niedostępny' }) }); }
     else await route.continue();
   });
-  await page.locator('.map-library-card [data-action="load"]').first().click();
+  await page.locator('.map-library-preview').first().press('Enter');
   await page.locator('#map-error').getByText(/Obraz chwilowo niedostępny/).waitFor();
   await page.evaluate(() => OneRingStore.refresh());
   await page.locator('#map-terrain image').waitFor();
