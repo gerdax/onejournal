@@ -4,19 +4,21 @@
 const { createStore, normalizeNotebook } = typeof require === "function" ? require("./state.js") : globalThis.OneRingState;
 const DiceRules = typeof require === "function" ? require("./dice-rules.js") : globalThis.DiceRules;
 const MAX_ROLLS = 10000;
-const GM_METHODS = new Set(["addEnemy", "removeParticipant", "clearBattle", "clearEncounter", "toggleDefeated", "setEnemyWound", "setEnemyWeary", "setEnemyNotes", "adjustResource", "reorderEnemies", "addLibrary", "removeLibrary", "importLibrary", "saveHero", "deleteHero", "addHero", "setMap", "moveToken", "restoreBackup", "selectToken"]);
+const GM_METHODS = new Set(["addEnemy", "removeParticipant", "clearBattle", "clearEncounter", "toggleDefeated", "setEnemyWound", "setEnemyWeary", "setEnemyNotes", "adjustResource", "reorderEnemies", "addLibrary", "removeLibrary", "importLibrary", "saveHero", "deleteHero", "addHero", "setMap", "moveToken", "removeMap", "loadMap", "restoreBackup", "selectToken"]);
 const own = (x, key) => Object.prototype.hasOwnProperty.call(x, key);
 const clone = x => JSON.parse(JSON.stringify(x));
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error; };
 const isObject = x => x !== null && typeof x === "object" && !Array.isArray(x);
 const finiteInt = x => Number.isInteger(x) && x >= 0;
 const avatarIds = state => [...new Set((Array.isArray(state?.heroes) ? state.heroes : []).map(h => h?.avatarId).filter(Boolean))];
-function avatarImage(dataUrl, hashSecret) {
-  if (typeof dataUrl !== "string" || dataUrl.length > 23 + 4 * Math.ceil(65536 / 3) || !/^data:image\/jpeg;base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(dataUrl)) fail(400, "Nieprawidłowy obraz portretu.");
+const mapRoles = state => [...(Array.isArray(state?.mapLibrary) ? state.mapLibrary.flatMap(m => [{ id: m.imageId, thumbnail: false }, { id: m.thumbnailId, thumbnail: true }]) : []), ...(state?.map?.kind === "image" ? [{ id: state.map.imageId, thumbnail: false }] : [])];
+const mapIds = state => [...new Set(mapRoles(state).map(ref => ref.id))];
+function jpegImage(dataUrl, hashSecret, dimension, maxBytes) {
+  if (typeof dataUrl !== "string" || dataUrl.length > 23 + 4 * Math.ceil(maxBytes / 3) || !/^data:image\/jpeg;base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(dataUrl)) fail(400, "Nieprawidłowy obraz JPEG.");
   const encoded = dataUrl.slice(23);
   let bytes;
   try { bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0)); } catch { fail(400, "Nieprawidłowy obraz portretu."); }
-  if (bytes.length > 65536 || bytes.length < 32 || bytes[0] !== 255 || bytes[1] !== 216) fail(400, "Portret musi być obrazem JPEG 256 × 256 do 64 KiB.");
+  if (bytes.length > maxBytes || bytes.length < 32 || bytes[0] !== 255 || bytes[1] !== 216) fail(400, "Nieprawidłowy obraz JPEG.");
   let pos = 2, width = 0, height = 0, scan = false, ended = false, scanSeen = false, entropy = 0, quantization = false, huffman = false;
   while (pos < bytes.length) {
     if (scan) {
@@ -47,9 +49,11 @@ function avatarImage(dataUrl, hashSecret) {
     }
     pos += length;
   }
-  if (!ended || !scanSeen || !entropy || !quantization || !huffman || width !== 256 || height !== 256) fail(400, "Portret musi być poprawnym obrazem JPEG 256 × 256.");
+  if (!ended || !scanSeen || !entropy || !quantization || !huffman || width !== dimension || height !== dimension) fail(400, `Obraz musi być poprawnym JPEG ${dimension} × ${dimension}.`);
   return { id: hashSecret(bytes), dataUrl };
 }
+const avatarImage = (dataUrl, hashSecret) => jpegImage(dataUrl, hashSecret, 256, 65536);
+const mapImage = (dataUrl, hashSecret, thumbnail = false) => jpegImage(dataUrl, hashSecret, thumbnail ? 384 : 1024, thumbnail ? 262144 : 2 * 1024 * 1024);
 const storageFor = state => {
   let saved = state ? JSON.stringify(state) : null;
   return { getItem: key => key === "one-ring-state" ? saved : null, setItem: (key, value) => { if (key === "one-ring-state") saved = value; } };
@@ -75,7 +79,7 @@ const rollVisibility = (config, authorRole) => authorRole === "player" ? "public
   config.privateRoll === true ? "private" : config.privateRoll === false ? "public" :
     config.actor === "hero" ? "public" : "private";
 const defaultDocument = () => ({ state: createStore(storageFor(null)).getState(), revision: 0, publicRevision: 0, heroVersions: {}, selection: null, rolls: [], links: [], grants: [], notebook: { blocks: [] }, notebookVersion: 0 });
-const publicMap = map => map ? {
+const publicMap = map => map?.kind === "image" ? clone(map) : map ? {
   scene: map.scene, size: map.size, seed: map.seed, width: map.width, height: map.height,
   terrain: map.terrain.map(t => ({ kind: t.kind, x: t.x, y: t.y, r: t.r, rotation: t.rotation, variant: t.variant })),
   positions: clone(map.positions), ...(map.features ? { features: clone(map.features) } : {})
@@ -93,7 +97,7 @@ function accessFor(doc, uid) {
 }
 function snapshot(doc, access) {
   const gm = access.role === "gm";
-  const state = gm ? clone(doc.state) : { version: 2, library: [], battle: [], heroes: doc.state.heroes.filter(h => h.id === access.heroId).map(clone), heroParticipants: doc.state.heroParticipants.filter(p => p.heroId === access.heroId).map(clone), map: publicMap(doc.state.map) };
+  const state = gm ? { ...clone(doc.state), mapLibrary: clone(doc.state.mapLibrary || []) } : { version: 2, library: [], battle: [], heroes: doc.state.heroes.filter(h => h.id === access.heroId).map(clone), heroParticipants: doc.state.heroParticipants.filter(p => p.heroId === access.heroId).map(clone), map: publicMap(doc.state.map) };
   const versions = gm ? clone(doc.heroVersions) : { [access.heroId]: doc.heroVersions[access.heroId] || 0 };
   const publicParticipants = participantList(doc.state);
   const fullParticipants = createStore(storageFor(doc.state)).getParticipants();
@@ -183,8 +187,18 @@ function validateMethodInput(method, args, access, doc, heroVersion) {
   }
   if (method === "restoreBackup" && access.role !== "gm") fail(403, "Brak uprawnień.");
 }
-function createServerCore({ repository, avatarStorage = { get: async () => null, put: async () => { throw new Error("Avatar storage unavailable"); } }, hashSecret, randomSecret, encryptSecret, decryptSecret, catalog = [], now = () => new Date().toISOString() }) {
+function createServerCore({ repository, avatarStorage = { get: async () => null, put: async () => { throw new Error("Avatar storage unavailable"); } }, mapStorage = { get: async () => null, put: async () => { throw new Error("Map storage unavailable"); } }, hashSecret, randomSecret, encryptSecret, decryptSecret, catalog = [], now = () => new Date().toISOString() }) {
   if (!repository || !hashSecret || !randomSecret || !encryptSecret || !decryptSecret) throw new Error("Missing server dependency");
+  async function verifyMapReferences(raw) {
+    const checked = createStore(storageFor(raw));
+    if (checked.loadError) fail(400, checked.loadError.message);
+    const state = checked.getState();
+    for (const { id, thumbnail } of mapRoles(state)) {
+      const dataUrl = await mapStorage.get(id);
+      if (!dataUrl || mapImage(dataUrl, hashSecret, thumbnail).id !== id) fail(400, "Brakuje poprawnego obrazu mapy.");
+    }
+    return state;
+  }
   const project = (doc, access) => {
     const response = snapshot(doc, access);
     if (access.role === "gm") response.catalog = clone(catalog);
@@ -202,10 +216,16 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
         if (!dataUrl || avatarImage(dataUrl, hashSecret).id !== id) fail(500, "Brakuje obrazu portretu.");
         avatars[id] = dataUrl;
       }
+      const maps = {};
+      for (const { id, thumbnail } of mapRoles(doc.state)) {
+        const dataUrl = await mapStorage.get(id);
+        if (!dataUrl || mapImage(dataUrl, hashSecret, thumbnail).id !== id) fail(500, "Brakuje obrazu mapy.");
+        maps[id] = dataUrl;
+      }
       const current = await repository.get();
       if (accessFor(current, uid).role !== "gm") fail(403, "Brak uprawnień.");
       if (current.revision !== doc.revision || current.notebookVersion !== doc.notebookVersion) fail(409, "Stan gry zmienił się. Ponów eksport.");
-      return { format: "onejournal", version: 2, state: clone(doc.state), rolls: doc.rolls.map(r => clone(r.entry)), avatars, notebook: clone(doc.notebook || { blocks: [] }) };
+      return { format: "onejournal", version: 2, state: clone(doc.state), rolls: doc.rolls.map(r => clone(r.entry)), avatars, maps, notebook: clone(doc.notebook || { blocks: [] }) };
     }
     if (action === "links") {
       if (access.role !== "gm") fail(403, "Brak uprawnień.");
@@ -257,7 +277,23 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
         publicChange = false;
       } else {
         access = accessFor(doc, uid);
-        if (request.action === "avatarSet") {
+        if (request.action === "mapUpload") {
+          if (access.role !== "gm") fail(403, "Brak uprawnień.");
+          if (typeof request.id !== "string" || !/^[\w-]{1,100}$/.test(request.id) || typeof request.name !== "string" || !request.name.trim() || request.name.length > 200) fail(400, "Nieprawidłowa nazwa mapy.");
+          const image = mapImage(request.dataUrl, hashSecret);
+          const thumbnail = mapImage(request.thumbnailDataUrl, hashSecret, true);
+          const existing = doc.state.mapLibrary?.find(m => m.id === request.id);
+          if (existing) {
+            if (existing.name !== request.name.trim() || existing.imageId !== image.id || existing.thumbnailId !== thumbnail.id) fail(409, "ID mapy jest już użyte.");
+            await mapStorage.put(image.id, image.dataUrl);
+            await mapStorage.put(thumbnail.id, thumbnail.dataUrl);
+            const response = project(doc, access); response.result = clone(existing); return response;
+          }
+          await mapStorage.put(image.id, image.dataUrl);
+          await mapStorage.put(thumbnail.id, thumbnail.dataUrl);
+          output = resultOf("addMap", [{ id: request.id, name: request.name, imageId: image.id, thumbnailId: thumbnail.id, uploadedAt: now() }], doc);
+          publicChange = false;
+        } else if (request.action === "avatarSet") {
           const hero = doc.state.heroes.find(h => h.id === request.heroId);
           if (!hero) fail(400, "Nieznany bohater.");
           if (access.role !== "gm" && access.heroId !== hero.id) fail(403, "Brak uprawnień do bohatera.");
@@ -276,8 +312,11 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
           const oldState = doc.state;
           const args = clone(request.args);
           if (request.method === "restoreBackup" && isObject(args[0]) && args[0].format === "onejournal") {
-            if (![1, 2].includes(args[0].version) || !Array.isArray(args[0].rolls)) fail(400, "Nieprawidłowa kopia.");
+            if (![1, 2].includes(args[0].version) || !Array.isArray(args[0].rolls) || !isObject(args[0].state)) fail(400, "Nieprawidłowa kopia.");
             const wrapper = args[0];
+            const checkedWrapper = createStore(storageFor(wrapper.state));
+            if (checkedWrapper.loadError) fail(400, checkedWrapper.loadError.message);
+            const wrapperState = checkedWrapper.getState();
             const ids = avatarIds(wrapper.state || { heroes: [] });
             if (wrapper.version === 2) {
               if (!isObject(wrapper.avatars) || Object.keys(wrapper.avatars).length !== ids.length || Object.keys(wrapper.avatars).some(id => !ids.includes(id) || wrapper.avatars[id] !== null)) fail(400, "Nieprawidłowy spis portretów.");
@@ -285,8 +324,20 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
                 const dataUrl = await avatarStorage.get(id);
                 if (!dataUrl || avatarImage(dataUrl, hashSecret).id !== id) fail(400, "Brakuje obrazu portretu.");
               }
-            } else if (ids.length) fail(400, "Brakuje obrazów portretów.");
+              if (own(wrapper, "maps")) {
+                const mapReferences = mapIds(wrapperState);
+                if (!isObject(wrapper.maps) || Object.keys(wrapper.maps).length !== mapReferences.length || Object.keys(wrapper.maps).some(id => !mapReferences.includes(id) || wrapper.maps[id] !== null)) fail(400, "Nieprawidłowy spis map.");
+                for (const { id, thumbnail } of mapRoles(wrapperState)) {
+                  const dataUrl = await mapStorage.get(id);
+                  if (!dataUrl || mapImage(dataUrl, hashSecret, thumbnail).id !== id) fail(400, "Brakuje obrazu mapy.");
+                }
+              } else if (mapIds(wrapperState).length) fail(400, "Brakuje obrazów map.");
+            } else {
+              if (ids.length) fail(400, "Brakuje obrazów portretów.");
+              if (mapIds(wrapperState).length) fail(400, "Brakuje obrazów map.");
+            }
             args[0] = wrapper.state;
+            if (!own(args[0], "mapLibrary")) args[0].mapLibrary = clone(doc.state.mapLibrary || []);
             doc.rolls = restoredRolls(wrapper.rolls, uid);
             doc.rollEpoch = (doc.rollEpoch || 0) + 1;
             if (wrapper.version === 2 && Object.hasOwn(wrapper, "notebook")) {
@@ -295,6 +346,22 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
             }
           }
           if (request.method === "restoreBackup" && (!isObject(request.args[0]) || request.args[0].format !== "onejournal") && avatarIds(args[0]).length) fail(400, "Brakuje obrazów portretów.");
+          if (request.method === "restoreBackup" && (!isObject(request.args[0]) || request.args[0].format !== "onejournal")) {
+            if (!isObject(args[0])) fail(400, "Nieprawidłowa kopia.");
+            if (!own(args[0], "mapLibrary")) args[0].mapLibrary = clone(doc.state.mapLibrary || []);
+          }
+          if (request.method === "restoreBackup") await verifyMapReferences(args[0]);
+          if (request.method === "setMap" && args[0]?.kind === "image") {
+            if (typeof args[0].imageId !== "string" || !/^[a-f0-9]{64}$/.test(args[0].imageId)) fail(400, "Nieprawidłowy obraz mapy.");
+            const dataUrl = await mapStorage.get(args[0].imageId);
+            if (!dataUrl || mapImage(dataUrl, hashSecret).id !== args[0].imageId) fail(400, "Brakuje poprawnego obrazu mapy.");
+          }
+          if (request.method === "loadMap") {
+            const selected = doc.state.mapLibrary?.find(m => m.id === args[0]);
+            if (!selected) fail(400, "Nieznana mapa.");
+            const dataUrl = await mapStorage.get(selected.imageId);
+            if (!dataUrl || mapImage(dataUrl, hashSecret).id !== selected.imageId) fail(400, "Brakuje poprawnego obrazu mapy.");
+          }
           if (request.method === "saveHero" && access.role === "gm" && args[0].id && !doc.state.heroes.some(h => h.id === args[0].id)) delete args[0].id;
           try { output = resultOf(request.method, args, doc); }
           catch (error) { fail(400, error.message || "Nieprawidłowa komenda."); }
@@ -317,7 +384,7 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
             doc.grants = doc.grants.filter(g => g.role === "gm" || ids.has(g.heroId));
           }
           if (request.method === "deleteHero") delete doc.heroVersions[request.args[0]];
-          publicChange = !["addLibrary", "removeLibrary", "importLibrary", "setEnemyWound", "setEnemyWeary", "setEnemyNotes"].includes(request.method);
+          publicChange = !["addLibrary", "removeLibrary", "importLibrary", "removeMap", "setEnemyWound", "setEnemyWeary", "setEnemyNotes"].includes(request.method);
           if (request.method === "setEnemyWound") {
             const before = oldState.battle.find(enemy => enemy.id === request.args[0]);
             const after = doc.state.battle.find(enemy => enemy.id === request.args[0]);
@@ -401,7 +468,7 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
         if (request.action === "rotateLink") return output;
         const response = project(doc, access);
         if (request.action === "command") response.result = output === undefined ? null : output;
-        if (request.action === "avatarSet") response.result = output;
+        if (request.action === "avatarSet" || request.action === "mapUpload") response.result = output;
         return response;
       }
     }
@@ -410,9 +477,29 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
   return { defaultDocument, snapshot, handle(uid, request) {
     if (typeof uid !== "string" || !uid || !isObject(request)) fail(400, "Nieprawidłowe żądanie.");
     if (["snapshot", "export", "links"].includes(request.action)) return read(uid, request.action);
-    if (request.action === "avatarGet" || request.action === "avatarStage") return (async () => {
+    if (["avatarGet", "avatarStage", "mapGet", "mapStage"].includes(request.action)) return (async () => {
       const doc = await repository.get();
       const access = accessFor(doc, uid);
+      if (request.action === "mapStage") {
+        if (access.role !== "gm") fail(403, "Brak uprawnień.");
+        const image = mapImage(request.dataUrl, hashSecret, request.thumbnail === true);
+        await mapStorage.put(image.id, image.dataUrl);
+        return { imageId: image.id };
+      }
+      if (request.action === "mapGet") {
+        const imageId = request.imageId;
+        if (typeof imageId !== "string" || !/^[a-f0-9]{64}$/.test(imageId)) fail(400, "Nieprawidłowy obraz mapy.");
+        const allowed = access.role === "gm" ? mapIds(doc.state).includes(imageId) : doc.state.map?.kind === "image" && doc.state.map.imageId === imageId;
+        if (!allowed) fail(409, "Obraz mapy nie jest już dostępny.");
+        const dataUrl = await mapStorage.get(imageId);
+        const thumbnail = doc.state.mapLibrary?.some(m => m.thumbnailId === imageId && m.imageId !== imageId);
+        if (!dataUrl || mapImage(dataUrl, hashSecret, thumbnail).id !== imageId) fail(500, "Brakuje obrazu mapy.");
+        const current = await repository.get();
+        const currentAccess = accessFor(current, uid);
+        const stillAllowed = currentAccess.role === "gm" ? mapIds(current.state).includes(imageId) : current.state.map?.kind === "image" && current.state.map.imageId === imageId;
+        if (!stillAllowed) fail(409, "Obraz mapy został zmieniony.");
+        return { imageId, dataUrl };
+      }
       if (request.action === "avatarStage") {
         if (access.role !== "gm") fail(403, "Brak uprawnień.");
         const image = avatarImage(request.dataUrl, hashSecret);

@@ -8,7 +8,8 @@ const { startFixture } = require('./fixture-server.cjs');
   const fixture = await startFixture();
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', args: ['--no-sandbox'] });
   try {
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    // Leave scroll room now that the generator's tall toolbar is gone.
+    const context = await browser.newContext({ viewport: { width: 390, height: 700 }, isMobile: true, hasTouch: true });
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -100,7 +101,7 @@ const { startFixture } = require('./fixture-server.cjs');
     await touch('touchEnd', []);
     await page.locator('#map-fullscreen').tap();
 
-    const playerContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const playerContext = await browser.newContext({ viewport: { width: 390, height: 700 }, isMobile: true, hasTouch: true });
     const player = await playerContext.newPage();
     player.on('pageerror', error => errors.push(error.message));
     await player.goto(fixture.url + '/#access=' + fixture.secrets.players[0]);

@@ -139,6 +139,29 @@ separate staging areas, while existing positions remain unchanged. Scenes are
 `forest`, `clearing`, `ruins`, `cave`; sizes are `small`, `medium`, `large`. `restoreBackup(data)` validates the entire version-2
 backup before replacing state, and throws when it is invalid.
 
+Image maps use `{kind:'image',imageId,width:1200,height:1200,positions:{}}`.
+Their source JPEG is 1024 × 1024 (at most 2 MiB); token coordinates use the
+1200 × 1200 display space. Generated map records keep their existing shape.
+`state.mapLibrary` contains GM-only records `{id,name,uploadedAt,imageId,thumbnailId}`;
+missing `mapLibrary` in old state normalizes to an empty list. Both image IDs
+are SHA-256 hashes of JPEG bytes, and thumbnails are 384 × 384 (at most 256 KiB).
+Cloud `uploadMap({id,name,dataUrl,thumbnailDataUrl})` returns the server-stamped
+record. Repeating an upload ID with the same name and bytes returns that record;
+reusing it with different content conflicts. `getMapImage(imageId)` returns
+`{imageId,dataUrl}`. The GM can fetch images referenced by the library or active
+map; players can fetch only the active full image. `loadMap(id)` activates a
+library image and resets positions while preserving battle participants.
+`removeMap(id)` removes library metadata, retaining an active image and its
+bytes. Upload and removal advance only the GM revision; activation advances
+the public revision. Snapshots carry references, never image bytes.
+
+Version-2 cloud backups include `maps`, an object from every referenced full
+image and thumbnail ID (including a deleted but active image) to its JPEG data
+URL. Cloud restore stages those images and sends a manifest of null values for
+atomic reference validation. Older backups without `mapLibrary` preserve the
+current map library. Image references are validated against private storage on
+restore and direct `setMap`.
+
 New small, medium and large maps are square: 900, 1200 and 1600 pixels per side.
 Existing maps retain their dimensions until regenerated.
 
