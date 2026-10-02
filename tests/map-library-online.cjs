@@ -33,7 +33,7 @@ async function main() {
   assert.equal(await gm.locator('#map-generate').count(),0);
   assert.equal(await player.getByRole('button',{name:'Sceneria',exact:true}).isVisible(),false);
   await gm.getByRole('button',{name:'Sceneria',exact:true}).click();
-  const dialog=gm.getByRole('dialog',{name:'Biblioteka map',exact:true});
+  const dialog=gm.getByRole('dialog',{name:'Wybierz scenerię',exact:true});
   await dialog.waitFor();
   const input=dialog.locator('input[type=file]');
   await input.setInputFiles([await file(gm,'pozioma.png',600,300),await file(gm,'pionowa.png',300,600)]);
