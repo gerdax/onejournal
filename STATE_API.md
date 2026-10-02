@@ -27,7 +27,7 @@ player snapshots omit notebook data. `OneRingState.normalizeNotebook` validates
 and canonicalizes documents, rejecting malformed or oversized content.
 Additional methods: `connect(secret?)`, `refresh()`, `markOffline()`, `stop()`,
 `selectToken(id)`, `listLinks()`, `rotateLink(heroId)`, `revokeLink(heroId)`,
-`publishRoll({id,heroId,enemyId?,config,raw})`. Offline mutations reject without sending.
+`publishRoll({id,heroId,enemyId?,boundHeroId?,config,raw})`. Offline mutations reject without sending.
 
 Player snapshots have empty library/battle arrays and only the assigned hero.
 `getParticipants()` is independent of those arrays: public token fields for
@@ -38,7 +38,7 @@ GM rolls may set the optional boolean `config.privateRoll` independently of acto
 `true` stores a private roll, `false` stores a public roll. Without that field,
 legacy visibility applies: GM hero rolls are public and NPC/enemy rolls private.
 Player rolls are always public; the server rejects `privateRoll: true` from a player.
-New generic GM hero rolls are named `MG`; generic enemy rolls are named `Przeciwnik`.
+New generic GM hero and enemy rolls are named `MG`; historical names stay unchanged.
 An optional top-level `enemyId` binds a GM enemy roll to an existing battle enemy.
 The server stores that enemy's current name and ID in the journal entry; backup
 restore keeps both even after the enemy is removed. A bound roll with
@@ -48,8 +48,8 @@ Identical retries spend nothing further; the binding participates in the
 idempotency key. Generic rolls without `enemyId` retain their existing behavior.
 Each new journal entry includes `visibility: 'public'|'private'`; older entries
 without it use the same legacy actor rule in the journal UI. The stored roll
-wrapper controls filtering in player snapshots. Only public rolls advance the
-public revision. Backups retain both `config.privateRoll` when present and each
+wrapper controls filtering in player snapshots. Public rolls and private hero rolls that spend Hope advance the
+public revision, so the assigned player receives the changed sheet without the private result. Backups retain both `config.privateRoll` when present and each
 entry's visibility; restore derives visibility for older backups without it and
 keeps historical hero names.
 
@@ -90,7 +90,7 @@ is malformed, `loadError` explains the startup problem and normal mutations are
 blocked; call `restoreBackup(validBackup)` to explicitly recover it.
 
 Battle and library methods are `addEnemy`, `removeParticipant`, `clearBattle`,
-`clearEncounter`, `toggleDefeated`, `setEnemyWound`, `setEnemyWeary`, `adjustResource`, `reorderEnemies`, `addLibrary`,
+`clearEncounter`, `toggleDefeated`, `setEnemyWound`, `setEnemyWeary`, `setEnemyNotes`, `adjustResource`, `reorderEnemies`, `addLibrary`,
 `removeLibrary`, and `importLibrary`. Enemy battle entries retain the legacy
 fields (`endurance`, `maxEndurance`, `hate`, `maxHate`, `defeated`, and combat
 metadata). `importLibrary(data)` accepts an array or `{library}` and returns the
@@ -138,6 +138,29 @@ map-pixel coordinates to a 32px inset within its bounds. New participants use
 separate staging areas, while existing positions remain unchanged. Scenes are
 `forest`, `clearing`, `ruins`, `cave`; sizes are `small`, `medium`, `large`. `restoreBackup(data)` validates the entire version-2
 backup before replacing state, and throws when it is invalid.
+
+Image maps use `{kind:'image',imageId,width:1200,height:1200,positions:{}}`.
+Their source JPEG is 1024 × 1024 (at most 2 MiB); token coordinates use the
+1200 × 1200 display space. Generated map records keep their existing shape.
+`state.mapLibrary` contains GM-only records `{id,name,uploadedAt,imageId,thumbnailId}`;
+missing `mapLibrary` in old state normalizes to an empty list. Both image IDs
+are SHA-256 hashes of JPEG bytes, and thumbnails are 384 × 384 (at most 256 KiB).
+Cloud `uploadMap({id,name,dataUrl,thumbnailDataUrl})` returns the server-stamped
+record. Repeating an upload ID with the same name and bytes returns that record;
+reusing it with different content conflicts. `getMapImage(imageId)` returns
+`{imageId,dataUrl}`. The GM can fetch images referenced by the library or active
+map; players can fetch only the active full image. `loadMap(id)` activates a
+library image and resets positions while preserving battle participants.
+`removeMap(id)` removes library metadata, retaining an active image and its
+bytes. Upload and removal advance only the GM revision; activation advances
+the public revision. Snapshots carry references, never image bytes.
+
+Version-2 cloud backups include `maps`, an object from every referenced full
+image and thumbnail ID (including a deleted but active image) to its JPEG data
+URL. Cloud restore stages those images and sends a manifest of null values for
+atomic reference validation. Older backups without `mapLibrary` preserve the
+current map library. Image references are validated against private storage on
+restore and direct `setMap`.
 
 New small, medium and large maps are square: 900, 1200 and 1600 pixels per side.
 Existing maps retain their dimensions until regenerated.
@@ -189,7 +212,9 @@ are visual terrain only; they impose no movement rules. Legacy maps without
 features remain unchanged; backups still use version 2. New generation affects
 only explicitly regenerated maps, never existing terrain or token positions.
 
-Enemy records include plain-text `notes` (empty by default for legacy entries). Notes are copied with library templates into encounters and clones, preserved in backups, and included when detecting duplicate library imports. Map notes are read-only snapshots of the added enemy, like its other template fields.
+Enemy records include plain-text `notes` (empty by default for legacy entries). Notes are copied with library templates into encounters and clones, preserved in backups, and included when detecting duplicate library imports. GM map notes edit only that encounter instance through `setEnemyNotes(id, notes, expectedNotes)`. All arguments are strings; a missing enemy returns 404 and a different current `notes` value returns 409. The comparison and write participate in the document CAS, so simultaneous editors cannot silently overwrite one another. Players cannot call this command or read these notes; changes increment only the private revision. No schema or backup format changes are required.
+
+The editor autosaves after 500 ms and keeps per-enemy drafts and in-flight writes when switching tokens or receiving snapshots. Errors preserve the draft. A conflict requires an explicit choice to save the draft instead of the current server text (using its latest value as the new expectation) or accept the server text. These in-memory drafts do not survive reloading the page.
 
 Cloud store: `clearRolls()` atomically deletes all published public and private rolls.
 Only GM may call it (server-enforced); the returned snapshot updates the caller,
@@ -205,3 +230,20 @@ writes accept Might only in 0–5; saved data and backup loading are not clamped
 `rollEpoch` is a non-sensitive journal generation counter included in snapshots
 and prepared rolls. Clearing increments it, so retries of cleared rolls cannot
 recreate entries or spend Hope again. No cleared roll contents are retained.
+
+GM rolls may explicitly bind a hero using optional top-level `boundHeroId`. This
+requires GM access, `config.actor: 'hero'`, an existing hero, and no `enemyId`.
+The journal stores the hero's `heroId`, `heroName`, and name. A bound roll with
+`config.hope: true` spends one Hope and increments the hero version atomically
+with insertion, including private rolls. Zero Hope or a missing hero rejects
+without a write. Identical retries never spend again, even after hero deletion;
+the binding participates in the idempotency payload. Legacy GM `heroId` alone
+still denotes a generic roll and never binds or spends. Players cannot use
+`boundHeroId`; their existing assigned-hero contract is unchanged.
+
+The GM dice panel captures the selected actor when opened. No selection means
+a generic roll (default private); a selected hero/enemy means a bound roll
+(default public). Each opening resets privacy; subsequent rolls in the same
+opening retain the manual choice. Selection changes during animation cannot
+redirect a prepared roll or its resource cost. `selectToken(null)` clears the
+GM selection; the player UI remains attached to its own hero.

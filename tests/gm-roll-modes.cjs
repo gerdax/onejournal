@@ -23,8 +23,9 @@ async function open(role, secret) {
   return { page, context };
 }
 async function refresh(page) { await page.evaluate(() => window.OneRingStore.refresh()); }
-async function roll(page, mode, nextCount) {
+async function roll(page, mode, nextCount, publicRoll = false) {
   await page.locator('.dice-launch').click();
+  if (publicRoll) await page.locator('[data-check="privateRoll"]').uncheck();
   if (mode) await page.locator(`.dice-dialog [data-choice="actor"] [data-value="${mode}"]`).click();
   await page.locator('.dice-dialog [data-choice="baseDice"] [data-value="1"]').click();
   await page.locator('.dice-dialog .dice-roll').click();
@@ -39,7 +40,7 @@ async function main() {
   const b = await open('player B', fixture.secrets.players[1]);
   try {
     await gm.page.locator('.dice-launch').click();
-    assert.deepEqual(await gm.page.locator('.dice-dialog [data-choice="actor"] button').allTextContents(), ['MG', 'Przeciwnik']);
+    assert.deepEqual(await gm.page.locator('.dice-dialog [data-choice="actor"] button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label'))), ['Runa Gandalfa', 'Oko Saurona']);
     assert.equal(await gm.page.locator('.dice-dialog select').count(), 0, 'GM should not choose a hero for a generic roll');
     assert.equal(await gm.page.locator('.dice-dialog [data-check="privateRoll"]').isChecked(), true);
     await gm.page.locator('.dice-dialog [data-check="privateRoll"]').uncheck();
@@ -49,7 +50,7 @@ async function main() {
     assert.equal(await a.page.locator('.dice-dialog select').count(), 0, 'Player should not choose a hero');
     await a.page.locator('.dice-dialog .dice-close').click();
 
-    await roll(gm.page, 'hero', 1);
+    await roll(gm.page, 'hero', 1, true);
     let entry = fixture.document.rolls.at(-1).entry;
     assert.equal(entry.actor, 'hero');
     assert.equal(entry.heroId, null);
@@ -86,7 +87,7 @@ async function main() {
     entry = fixture.document.rolls.at(-1).entry;
     assert.equal(entry.actor, 'enemy');
     assert.equal(entry.heroId, null);
-    assert.equal(entry.name, 'Przeciwnik');
+    assert.equal(entry.name, 'MG');
     assert.equal(fixture.document.rolls.at(-1).visibility, 'private');
     await refresh(a.page); await refresh(b.page);
     for (const { page } of [a, b]) {
@@ -129,7 +130,7 @@ async function main() {
     console.log('PASS: GM clears all rolls, both players see empty journals and no clear action');
 
     for (const hero of fixture.heroes) await gm.page.evaluate(id => window.OneRingStore.deleteHero(id), hero.id);
-    await roll(gm.page, 'hero', 1);
+    await roll(gm.page, 'hero', 1, true);
     entry = fixture.document.rolls.at(-1).entry;
     assert.equal(entry.actor, 'hero');
     assert.equal(entry.heroId, null);

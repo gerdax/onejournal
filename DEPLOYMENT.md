@@ -15,6 +15,8 @@ Po rotacji klucza szyfrowania trzeba ponownie zaszyfrować wszystkie linki lub w
 
 Aktualizacja notatnika wymaga kolejności: migracja `202609300001_notebook.sql`, `node scripts/admin-build.mjs` i wdrożenie Edge Function, następnie publikacja frontendu. Migracja dodaje prywatną treść i wersję notatnika; nie zmienia istniejących arkuszy, mapy ani rzutów.
 
+Aktualizacja edytowalnych notatek przeciwników: uruchom `node scripts/admin-build.mjs`, wdróż funkcję Edge z obsługą `setEnemyNotes`, a dopiero potem frontend. Migracja danych nie jest potrzebna. Starszy frontend działa z nowym backendem.
+
 ## GitHub Pages
 
 Repozytorium: `gerdax/onejournal`. W Settings → Pages ustaw Source: GitHub Actions. Push na `main` uruchamia testy jednostkowe, przygotowanie `dist/` oraz publikację. Do hostingu trafiają wyłącznie jawnie wybrane pliki frontendowe i zasoby vendor — nie funkcje serwerowe, backupy ani konfiguracja administracyjna.
@@ -34,3 +36,9 @@ Darmowy Supabase może wstrzymać projekt przy dłuższej nieaktywności. Przed 
 ## Przeniesienie do innego środowiska
 
 Odtwórz migracje w nowej bazie, ustaw oddzielne sekrety i nowy link MG, wgraj eksport JSON i sprawdź zgodność bohaterów, mapy oraz historii. Po potwierdzeniu wstrzymaj edycję starej gry, wykonaj końcowy eksport, import do nowego środowiska i przełącz konfigurację frontendu. Stare dane zachowaj do odbioru migracji. Zmiana dostawcy bez Supabase wymaga adaptera odpowiadającego kontraktowi `cloud-store.js` oraz serwera z tymi samymi kontrolami dostępu.
+
+## Biblioteka map
+
+Przed publikacją frontendu biblioteki map zastosuj migrację `202610020001_map_library.sql`, uruchom `node scripts/admin-build.mjs` i wdróż Edge Function. Nowy backend nadal obsługuje stare mapy generatora. Bucket `onejournal-maps` jest prywatny; tylko funkcja Edge odczytuje obrazy po sprawdzeniu dostępu. Gracze mogą pobrać wyłącznie obraz aktualnej potyczki.
+
+Usunięcie mapy z biblioteki nie usuwa aktywnego tła ani fizycznych obiektów Storage. Obrazy pozostają niezmienne; automatyczne czyszczenie nie jest częścią tej aktualizacji. Kopie gry obejmują bibliotekę oraz obraz aktywnej mapy, również po usunięciu wpisu z biblioteki. Sprawdź import wyłącznie na izolowanych danych.

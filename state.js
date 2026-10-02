@@ -24,7 +24,13 @@
   const id = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2));
   const number = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-  const blank = () => ({ version: 2, library: [], battle: [], heroes: [], heroParticipants: [], map: null });
+  const IMAGE_ID = /^[a-f0-9]{64}$/;
+  const blank = () => ({ version: 2, library: [], battle: [], heroes: [], heroParticipants: [], mapLibrary: [], map: null });
+
+  function mapLibraryEntry(raw) {
+    if (!object(raw) || typeof raw.id !== "string" || !/^[\w-]{1,100}$/.test(raw.id) || typeof raw.name !== "string" || !raw.name.trim() || raw.name.length > 200 || typeof raw.uploadedAt !== "string" || !Number.isFinite(Date.parse(raw.uploadedAt)) || typeof raw.imageId !== "string" || !IMAGE_ID.test(raw.imageId) || typeof raw.thumbnailId !== "string" || !IMAGE_ID.test(raw.thumbnailId)) throw new Error("Invalid map library entry");
+    return { id: raw.id, name: raw.name.trim(), uploadedAt: raw.uploadedAt, imageId: raw.imageId, thumbnailId: raw.thumbnailId };
+  }
 
   // The notebook is separate from the shared game state. Validate before any
   // write so malformed rich text cannot silently disappear during projection.
@@ -114,6 +120,16 @@
 
   function mapShape(raw, participants) {
     if (raw === null) return null;
+    if (object(raw) && raw.kind === "image") {
+      if (typeof raw.imageId !== "string" || !IMAGE_ID.test(raw.imageId) || raw.width !== 1200 || raw.height !== 1200 || !object(raw.positions)) throw new Error("Invalid image map");
+      const allowed = new Set(participants), positions = {};
+      Object.keys(raw.positions).forEach(pid => {
+        const p = raw.positions[pid];
+        if (!allowed.has(pid) || !object(p) || !Number.isInteger(p.x) || !Number.isInteger(p.y) || p.x < 0 || p.y < 0 || p.x >= 1200 || p.y >= 1200) throw new Error("Invalid map position");
+        positions[pid] = { x: p.x, y: p.y };
+      });
+      return { kind: "image", imageId: raw.imageId, width: 1200, height: 1200, positions };
+    }
     if (!object(raw) || !["forest", "clearing", "ruins", "cave", "forest_clearing", "forest_crossroads", "road", "river", "river_ford", "marsh", "ravine"].includes(raw.scene) || !["small", "medium", "large"].includes(raw.size) || !(typeof raw.seed === "string" || Number.isFinite(raw.seed)) || !Number.isInteger(raw.width) || !Number.isInteger(raw.height) || raw.width < 65 || raw.height < 65 || !Array.isArray(raw.terrain) || !object(raw.positions)) throw new Error("Invalid map");
     const allowed = new Set(participants);
     const positions = {};
@@ -147,8 +163,13 @@
     result.library = raw.library.map(x => enemy(x, false));
     result.battle = raw.battle.map(x => enemy(x, true));
     result.heroes = raw.heroes.map(hero);
+    if (Object.hasOwn(raw, "mapLibrary")) {
+      if (!Array.isArray(raw.mapLibrary) || raw.mapLibrary.length > 500) throw new Error("Invalid map library");
+      result.mapLibrary = raw.mapLibrary.map(mapLibraryEntry);
+    }
     const unique = (items, label) => { const all = new Set(); items.forEach(x => { if (all.has(x.id)) throw new Error("Duplicate " + label + " id"); all.add(x.id); }); return all; };
     const libraryIds = unique(result.library, "library"); const battleIds = unique(result.battle, "battle"); const heroIds = unique(result.heroes, "hero");
+    unique(result.mapLibrary, "map library");
     battleIds.forEach(x => { if (libraryIds.has(x) || heroIds.has(x)) throw new Error("Duplicate entity id"); });
     heroIds.forEach(x => { if (libraryIds.has(x)) throw new Error("Duplicate entity id"); });
     const participantIds = new Set();
@@ -217,6 +238,13 @@
       toggleDefeated(pid) { return mutate(() => { const e = state.battle.find(x => x.id === pid); if (e) e.defeated = !e.defeated; else { const p = state.heroParticipants.find(x => x.id === pid), h = p && state.heroes.find(x => x.id === p.heroId); if (h) h.defeated = !h.defeated; } }); },
       setEnemyWound(pid, index, checked) { return mutate(() => { if (!Number.isInteger(index) || index < 0) throw new RangeError("Invalid enemy wound index"); if (typeof checked !== "boolean") throw new TypeError("Enemy wound value must be boolean"); const e = state.battle.find(x => x.id === pid); if (!e) return; if (index >= e.wounds.length) throw new RangeError("Invalid enemy wound index"); const newlyChecked = checked && !e.wounds[index]; e.wounds[index] = checked; if (newlyChecked && e.wounds.every(Boolean)) e.defeated = true; }); },
       setEnemyWeary(pid, checked) { return mutate(() => { if (typeof checked !== "boolean") throw new TypeError("Enemy weary value must be boolean"); const e = state.battle.find(x => x.id === pid); if (!e) throw new Error("Unknown battle enemy"); e.weary = checked; }); },
+      setEnemyNotes(pid, notes, expectedNotes) { return mutate(() => {
+        if (typeof pid !== "string" || typeof notes !== "string" || typeof expectedNotes !== "string") throw new TypeError("Invalid enemy notes");
+        const e = state.battle.find(x => x.id === pid);
+        if (!e) throw Object.assign(new Error("Przeciwnik został usunięty."), { status: 404 });
+        if (e.notes !== expectedNotes) throw Object.assign(new Error("Notatki zostały zmienione w innym oknie."), { status: 409 });
+        e.notes = notes;
+      }); },
       adjustResource(pid, field, delta) { return mutate(() => { const e = state.battle.find(x => x.id === pid); const p = state.heroParticipants.find(x => x.id === pid); const target = e || (p && state.heroes.find(x => x.id === p.heroId)); if (!target) return; const maxima = { endurance: "maxEndurance", hate: "maxHate", hope: "maxHope" }; if (!(field in maxima) || !Number.isFinite(Number(delta)) || !(field in target)) return; target[field] = clamp(number(target[field], 0) + Number(delta), 0, number(target[maxima[field]], 0)); }); },
       reorderEnemies(ids) { return mutate(() => { if (!Array.isArray(ids) || ids.length !== state.battle.length || new Set(ids).size !== ids.length || ids.some(x => !state.battle.some(e => e.id === x))) throw new Error("Invalid enemy order"); state.battle.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)); }); },
       saveHero(data) { return mutate(() => { const input = Object.assign({}, data); const existing = input.id && state.heroes.find(x => x.id === input.id); if (input.wounded === false || (Object.hasOwn(input, "injury") && !(Object.hasOwn(input, "wounded") ? input.wounded : existing && existing.wounded))) input.injury = ""; const saved = hero(Object.assign({}, existing || {}, input, { id: existing ? existing.id : (input.id || id()) }));
@@ -236,6 +264,9 @@
       deleteHero(heroId) { return mutate(() => { state.heroes = state.heroes.filter(x => x.id !== heroId); state.heroParticipants = state.heroParticipants.filter(x => x.heroId !== heroId); }); },
       addHero(heroId) { return mutate(() => { if (!state.heroes.some(x => x.id === heroId)) throw new Error("Unknown hero"); const pid = "hero:" + heroId; if (!state.heroParticipants.some(x => x.id === pid)) state.heroParticipants.push({ id: pid, heroId }); return { id: pid, heroId }; }); },
       setMap(raw) { return mutate(() => { state.map = mapShape(raw, participantIds()); if (state.map) state.map.positions = {}; }); },
+      addMap(raw) { return mutate(() => { const entry = mapLibraryEntry(raw); const existing = state.mapLibrary.find(x => x.id === entry.id); if (existing) { if (JSON.stringify(existing) !== JSON.stringify(entry)) throw new Error("Map id already used"); return copy(existing); } if (state.mapLibrary.length >= 500) throw new Error("Map library full"); state.mapLibrary.push(entry); return copy(entry); }); },
+      removeMap(mapId) { return mutate(() => { state.mapLibrary = state.mapLibrary.filter(x => x.id !== mapId); }); },
+      loadMap(mapId) { return mutate(() => { const entry = state.mapLibrary.find(x => x.id === mapId); if (!entry) throw new Error("Unknown map"); state.map = { kind: "image", imageId: entry.imageId, width: 1200, height: 1200, positions: {} }; }); },
       moveToken(pid, x, y) { return mutate(() => { if (!state.map || !participantIds().has(pid) || !Number.isFinite(Number(x)) || !Number.isFinite(Number(y))) return; state.map.positions[pid] = { x: clamp(Math.round(Number(x)), 32, state.map.width - 33), y: clamp(Math.round(Number(y)), 32, state.map.height - 33) }; }); },
       addLibrary(raw) { return mutate(() => { const e = enemy(raw, false); if (state.library.some(x => x.id === e.id)) e.id = id(); state.library.push(e); return copy(e); }); },
       removeLibrary(libraryId) { return mutate(() => { state.library = state.library.filter(x => x.id !== libraryId); }); },

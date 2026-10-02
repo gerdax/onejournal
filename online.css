@@ -61,14 +61,15 @@ body[data-connection="offline"] #connection-status, body[data-connection="revoke
 body[data-role="player"] #heroes > .hero-heading,
 body[data-role="player"] #map > .map-heading { display: none; }
 
-/* Shrink navigation content only when its actual width requires it. */
+/* Keep full labels until their rendered widths need the compact icons. */
 .tabs > .tab { flex-shrink: 0; white-space: nowrap; }
-.tabs .tab :is(.nav-label-long, .nav-label-short) { background: none; font: inherit; border-radius: 0; margin: 0; padding: 0; }
-.tabs .nav-label-short { display: none; }
+.tabs .tab .nav-label-long { background: none; font: inherit; border-radius: 0; margin: 0; padding: 0; }
+.tabs .nav-tab-icon { display: none; width: 24px; height: 24px; }
 .tabs.nav-hide-count #map-count { display: none; }
-.tabs.nav-short-label .nav-label-long { display: none; }
-.tabs.nav-short-label .nav-label-short { display: inline; }
-.tabs.nav-short-label > .tab { padding-inline: 2px; }
+.tabs.nav-icon-label #map-count, .tabs.nav-icon-label #battle-count,
+.tabs.nav-icon-label > .tab .nav-label-long { display: none; }
+.tabs.nav-icon-label > .tab { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; }
+.tabs.nav-icon-label > .tab .nav-tab-icon { display: block; flex: none; }
 
 .journal-dialog { height: 85dvh; }
 .journal-dialog .journal-body { flex: 1; }

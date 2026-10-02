@@ -74,8 +74,41 @@ const avatarStorage = {
     }
   }
 };
+const mapBucket = "onejournal-maps";
+const mapStorage = {
+  async get(id: string) {
+    if (!/^[a-f0-9]{64}$/.test(id)) throw new Error("Invalid map image id");
+    const response = await fetch(`${url}/storage/v1/object/authenticated/${mapBucket}/${id}.jpg`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      if ([400, 404].includes(response.status) && error?.error === "not_found" && error?.message === "Object not found") return null;
+      throw new Error(`Map download failed (${response.status})`);
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > 2 * 1024 * 1024) throw new Error("Map exceeds size limit");
+    return `data:image/jpeg;base64,${bytes.toString("base64")}`;
+  },
+  async put(id: string, dataUrl: string) {
+    const previous = await this.get(id);
+    if (previous) {
+      if (previous !== dataUrl) throw new Error("Map hash collision");
+      return;
+    }
+    const bytes = Buffer.from(dataUrl.slice(23), "base64");
+    const response = await fetch(`${url}/storage/v1/object/${mapBucket}/${id}.jpg`, {
+      method: "POST", headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=31536000" },
+      body: bytes
+    });
+    if (!response.ok) {
+      if (await this.get(id) === dataUrl) return;
+      throw new Error(`Map upload failed (${response.status}): ${await response.text()}`);
+    }
+  }
+};
 const core = createServerCore({
-  repository, avatarStorage, catalog,
+  repository, avatarStorage, mapStorage, catalog,
   hashSecret: (secret: string | Uint8Array) => createHash("sha256").update(secret).digest("hex"),
   randomSecret: () => randomBytes(32).toString("base64url"), encryptSecret, decryptSecret
 });
@@ -89,7 +122,7 @@ async function limitedBody(request: Request) {
     const { done, value } = await reader.read();
     if (done) break;
     bytes += value.byteLength;
-    if (bytes > 1024 * 1024) { await reader.cancel(); const error = new Error("Żądanie jest za duże."); (error as any).status = 413; throw error; }
+    if (bytes > 4 * 1024 * 1024) { await reader.cancel(); const error = new Error("Żądanie jest za duże."); (error as any).status = 413; throw error; }
     output += decoder.decode(value, { stream: true });
   }
   return output + decoder.decode();
@@ -115,7 +148,7 @@ Deno.serve(async request => {
     const user = await auth.json();
     if (typeof user.id !== "string") return json({ error: "Nieprawidłowa sesja." }, 401, cors);
     const declared = Number(request.headers.get("content-length") || 0);
-    if (declared > 1024 * 1024) return json({ error: "Żądanie jest za duże." }, 413, cors);
+    if (declared > 4 * 1024 * 1024) return json({ error: "Żądanie jest za duże." }, 413, cors);
     const bodyText = await limitedBody(request);
     let body;
     try { body = JSON.parse(bodyText); } catch { return json({ error: "Nieprawidłowy JSON." }, 400, cors); }

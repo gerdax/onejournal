@@ -57,6 +57,54 @@ test('response started before offline cannot re-enable editing',async()=>{
   await store.refresh();assert.equal(store.canWrite,true);
 });
 
+test('queued GM upload is dropped when connect switches to a player grant', async () => {
+  const gm = { ...snapshot(), access: { role: 'gm', heroId: null } };
+  let entered, release;
+  const started = new Promise(resolve => { entered = resolve; });
+  const delayed = new Promise(resolve => { release = resolve; });
+  const sent = [];
+  const store = createStore({ request: async body => {
+    sent.push(body.action);
+    if (body.action === 'mapGet') { entered(); return delayed; }
+    if (body.action === 'exchange') return snapshot(2);
+    if (body.action === 'mapUpload') throw Object.assign(new Error('player cannot upload'), { status: 403 });
+    return gm;
+  } });
+  await store.connect();
+  const pendingRead = store.getMapImage('old-image');
+  await started;
+  const queuedUpload = store.uploadMap({ id: 'map-one', name: 'Moria', dataUrl: 'full', thumbnailDataUrl: 'thumb' });
+  await store.connect('player-link');
+  release({ imageId: 'old-image', dataUrl: 'old' });
+  await assert.rejects(pendingRead, { stale: true });
+  await assert.rejects(queuedUpload, { stale: true });
+  assert.deepEqual(sent, ['snapshot', 'mapGet', 'exchange']);
+  assert.equal(store.access.role, 'player');
+  assert.equal(store.connection, 'online');
+});
+
+test('backup staging stops when the grant changes mid-restore', async () => {
+  const gm = { ...snapshot(), access: { role: 'gm', heroId: null } };
+  let entered, release;
+  const started = new Promise(resolve => { entered = resolve; });
+  const delayed = new Promise(resolve => { release = resolve; });
+  const sent = [];
+  const store = createStore({ request: async body => {
+    sent.push(body.action);
+    if (body.action === 'mapStage') { entered(); return delayed; }
+    if (body.action === 'exchange') return snapshot(2);
+    return gm;
+  } });
+  await store.connect();
+  const pending = store.restoreBackup({ format: 'onejournal', version: 2, state: { ...gm.state, mapLibrary: [] }, rolls: [], avatars: {}, maps: { first: 'one', second: 'two' } });
+  await started;
+  await store.connect('player-link');
+  release({ imageId: 'first' });
+  await assert.rejects(pending, { stale: true });
+  assert.deepEqual(sent, ['snapshot', 'mapStage', 'exchange']);
+  assert.equal(store.connection, 'online');
+});
+
 test('avatar facade carries hero version and stages backup images before restore', async () => {
   const requests=[];
   const dataUrl='data:image/jpeg;base64,example';
@@ -74,6 +122,28 @@ test('avatar facade carries hero version and stages backup images before restore
   await store.restoreBackup({format:'onejournal',version:2,state:snapshot().state,rolls:[],avatars:{'image-id':dataUrl}});
   assert.equal(requests.at(-2).action,'avatarStage');
   assert.deepEqual(requests.at(-1).args[0].avatars,{'image-id':null});
+});
+
+test('map facade uploads, fetches, and stages portable backup images', async () => {
+  const requests = [];
+  const id = 'a'.repeat(64), thumb = 'b'.repeat(64);
+  const gm = { ...snapshot(), access: { role: 'gm', heroId: null } };
+  const store = createStore({ request: async body => {
+    requests.push(body);
+    if (body.action === 'mapGet') return { imageId: id, dataUrl: 'full' };
+    if (body.action === 'mapStage') return { imageId: body.thumbnail ? thumb : id };
+    if (body.action === 'mapUpload') return { ...gm, result: { id: 'map-one', imageId: id, thumbnailId: thumb } };
+    if (body.action === 'command') return { ...gm, result: null };
+    return gm;
+  } });
+  await store.connect();
+  assert.equal((await store.uploadMap({ id: 'map-one', name: 'Moria', dataUrl: 'full', thumbnailDataUrl: 'thumb' })).imageId, id);
+  assert.deepEqual(requests[1], { action: 'mapUpload', id: 'map-one', name: 'Moria', dataUrl: 'full', thumbnailDataUrl: 'thumb' });
+  assert.deepEqual(await store.getMapImage(id), { imageId: id, dataUrl: 'full' });
+  await store.restoreBackup({ format: 'onejournal', version: 2, state: { ...gm.state, mapLibrary: [{ id: 'map-one', thumbnailId: thumb, imageId: id }] }, rolls: [], avatars: {}, maps: { [id]: 'full', [thumb]: 'thumb' } });
+  assert.deepEqual(requests.slice(-3).map(x => x.action), ['mapStage', 'mapStage', 'command']);
+  assert.deepEqual(requests.at(-1).args[0].maps, { [id]: null, [thumb]: null });
+  assert.equal(requests.at(-2).thumbnail, true);
 });
 
 test('GM notebook getter is detached and save carries version with returned result', async () => {

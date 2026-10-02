@@ -8,9 +8,10 @@ MG i gracze otwierają indywidualne linki `#access=…`. Link jest kluczem dost�
 
 - **MG:** Drużyna, Przeciwnicy, Mapa, Ustawienia. Tworzenie, kopiowanie i unieważnianie linków w Ustawieniach. Nowy link odwołuje stare sesje.
 - **Gracz:** własny arkusz i mapa. Edytuje swój arkusz, widzi żetony i wspólne zaznaczenie MG. Nie przesuwa żetonów ani nie widzi cudzych arkuszy i statystyk przeciwników.
-- **Rzuty:** animacja 3D u rzucającego, powiadomienie i historia u pozostałych. MG wybiera ogólny rzut Bohatera (wspólny), NPC lub Przeciwnika (oba prywatne). NPC używa zasad Bohatera. Tylko gracz rzuca pod imieniem własnej postaci. Nie odejmują zasobów automatycznie. Wynik oczekujący na publikację można ponowić w Dzienniku bez nowego losowania.
+- **Rzuty:** animacja 3D u rzucającego, powiadomienie i historia u pozostałych. MG rzuca zaznaczoną na mapie postacią lub, bez zaznaczenia, generycznie jako MG w trybie runy Gandalfa albo oka Saurona. Rzut postaci jest domyślnie publiczny, generyczny prywatny; przełącznik Priv pozwala to zmienić. Rzuty powiązane z bohaterem lub przeciwnikiem odejmują zaznaczoną Nadzieję albo Nienawiść/Determinację; generyczne tylko modyfikują pulę. Gracz zawsze rzuca publicznie własnym bohaterem. Wynik oczekujący na publikację można ponowić w Dzienniku bez nowego losowania ani powtórnego wydatku.
 - **Notatnik MG:** pióro obok dziennika otwiera prywatny dokument z formatowaniem i automatycznym zapisem. Kopiowanie obejmuje całą treść, kosz wymaga potwierdzenia. Konflikt między kartami zachowuje szkic i pozwala wybrać wersję serwera lub świadomie zastąpić ją własną. Przy braku sieci szkic pozostaje w pamięci karty, a edycja jest wstrzymana.
 - **Brak internetu:** ostatni widok zostaje; zapisy i nowe rzuty są zablokowane. Szkic wpisany w arkuszu pozostaje w otwartej karcie i można go ponowić po odzyskaniu połączenia. Zamknięcie karty może utracić niezapisany szkic.
+- **Biblioteka map (MG):** w Potyczce wybierz „Sceneria”. Dodaj JPG/PNG przez „kliknij tutaj” lub przeciągnij pliki na listę; obrazy są kadrowane ze środka do kwadratu i zapisywane jako JPEG 1024 × 1024 px. Limit wejścia to 20 MiB i 40 megapikseli na plik. Dwuklik miniatury (na ekranie dotykowym dwa stuknięcia, z klawiatury Enter lub spacja) publikuje mapę graczom, zachowuje uczestników i ustawia ich na starcie. Usunięcie wpisu lub wyczyszczenie potyczki nie usuwa innych map z biblioteki.
 - **Awatar:** kliknij kwadrat przy imieniu i wybierz kwadratowy JPG, PNG lub WebP do 10 MB i 25 megapikseli. Obraz zostanie zmniejszony do miniatury 256 × 256 px. Kolejne kliknięcie pozwala go zastąpić; link „Usuń awatar” znajduje się w Ustawieniach (u MG przy danym bohaterze). Gracz może zmieniać tylko swój awatar. Wgrywanie i usuwanie wymaga połączenia.
 
 Dane wspólnej gry przechowuje Supabase. Kod frontendowy publikuje GitHub Pages. Komputer MG nie musi być włączony. Baza nie jest częścią publicznego repozytorium.
@@ -29,10 +30,15 @@ Przed pierwszym uruchomieniem testów wykonaj `npm ci --ignore-scripts` (Node 22
 - `NODE_PATH=<katalog-node_modules> node tests/kompendium-online.cjs` — popup MG, zużycie, strumieniowanie i prywatny czytnik PDF na izolowanych danych.
 - `node --check <zmieniony-plik.js>` — składnia.
 - `NODE_PATH=<katalog-node_modules> node tests/online.cjs` — izolowany serwer w pamięci i osobne przeglądarki MG/dwóch graczy.
+- `NODE_PATH=<katalog-node_modules> node tests/map-library-failures-online.cjs` — ponawianie uploadu, sortowanie, zachowanie fokusu i spóźnione odpowiedzi obrazów.
+- `NODE_PATH=<katalog-node_modules> node tests/map-library-online.cjs` — biblioteka map, kadrowanie, publikacja, prywatność i kopie na izolowanych danych.
 - `NODE_PATH=<katalog-node_modules> node tests/avatar-online.cjs` — wgrywanie, walidacja, synchronizacja i usuwanie awatarów oraz układ mobilny na izolowanych danych.
 - `NODE_PATH=<katalog-node_modules> node tests/notebook-online.cjs` — notatnik MG, formatowanie, schowek, zapis, konflikty, utrata sieci i układ mobilny na izolowanych danych.
 - `NODE_PATH=<katalog-node_modules> node tests/dice-online.cjs` — rzeczywisty rzut WebGL oraz ponowienie publikacji po awarii sieci.
 - `NODE_PATH=<katalog-node_modules> node tests/enemy-weary-online.cjs` — Wyczerpanie przeciwnika, ostrzeżenia zasobu i niezależność od biblioteki.
+- `NODE_PATH=<katalog-node_modules> node tests/dice-stance-online.cjs` — domyślne premie z postawy MG/gracza, ręczne korekty i rzeczywista pula rzutu.
+- `NODE_PATH=<katalog-node_modules> node tests/gm-token-rolls-online.cjs` — kontekst rzutu MG, prywatność, zasoby i układ mobilny.
+- `NODE_PATH=<katalog-node_modules> node tests/map-deselect-online.cjs` — odznaczanie żetonów myszą, dotykiem i klawiaturą oraz synchronizacja wyboru.
 - `NODE_PATH=<katalog-node_modules> node tests/enemy-rolls-online.cjs` — rzuty wybranego przeciwnika i wydawanie Nienawiści/Determinacji.
 
 Testy przeglądarkowe wymagają Playwright i Chrome. `CHROME_PATH` nadpisuje domyślną ścieżkę macOS. Pozostałe odziedziczone skrypty `.cjs` opisują lokalny interfejs bestiary i nie są testami online; nie uruchamiaj ich na produkcji.

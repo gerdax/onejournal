@@ -18,9 +18,9 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="overrides.css?v=71" />
     <link rel="stylesheet" href="heroes.css?v=97" />
-    <link rel="stylesheet" href="map.css?v=78" />
+    <link rel="stylesheet" href="map.css?v=83" />
     <link rel="stylesheet" href="dice-roller.css?v=100" />
-    <link rel="stylesheet" href="online.css?v=21" />
+    <link rel="stylesheet" href="online.css?v=22" />
     <link rel="stylesheet" href="notebook.css?v=4" />
     <link rel="stylesheet" href="kompendium.css?v=1" />
   </head>
@@ -28,10 +28,10 @@
     <section id="access-screen" class="access-screen"><h1>onejournal</h1><p id="access-message">Sprawdzanie dostępu do gry…</p><button id="access-retry" type="button" hidden>Spróbuj ponownie</button></section>
     <main class="shell" hidden>
       <nav class="tabs" aria-label="Główna nawigacja">
-        <button class="tab active" data-tab="heroes">Drużyna</button>
-        <button class="tab" data-tab="battle" hidden disabled>Aktywna walka <span id="battle-count">0</span></button>
-        <button class="tab" data-tab="opponents" aria-label="Przeciwnicy"><span class="nav-label-long" aria-hidden="true">Przeciwnicy</span><span class="nav-label-short" aria-hidden="true">Przeciw.</span></button>
-        <button class="tab" data-tab="map">Potyczka <span id="map-count">0</span></button>
+        <button class="tab active" data-tab="heroes" aria-label="Drużyna" title="Drużyna"><span class="nav-label-long" aria-hidden="true">Drużyna</span><svg class="nav-tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2H5Z"/></svg></button>
+        <button class="tab" data-tab="battle" aria-label="Aktywna walka" title="Aktywna walka" hidden disabled><span class="nav-label-long" aria-hidden="true">Aktywna walka</span><span id="battle-count" aria-hidden="true">0</span><svg class="nav-tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 16M20 4 4 20M4 4v5H2m2-5h5m11 0v5h2m-2-5h-5M4 20v-5H2m2 5h5m11 0v-5h2m-2 5h-5"/></svg></button>
+        <button class="tab" data-tab="opponents" aria-label="Przeciwnicy" title="Przeciwnicy"><span class="nav-label-long" aria-hidden="true">Przeciwnicy</span><svg class="nav-tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-3 14-3-10h-4L7 19 4 5Z"/></svg></button>
+        <button class="tab" data-tab="map" aria-label="Potyczka" title="Potyczka"><span class="nav-label-long" aria-hidden="true">Potyczka</span><span id="map-count" aria-hidden="true">0</span><svg class="nav-tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 3 1 11 11-2 2L4 6 3 3Zm18 0-3 1L7 15l2 2L20 6l1-3ZM13 18l5-5M6 13l5 5m6-1 4 4M7 17l-4 4"/></svg></button>
         <div class="nav-actions">
         <button class="tab nav-icon" id="notebook-open" type="button" aria-label="Zapiski" title="Zapiski" aria-haspopup="dialog" hidden><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21 16 7M7 17C4 11 11 3 21 2c0 8-4 15-11 15H7Z"/><path d="m10 10 1 4m3-7 1 3m-3 6 5-1"/></svg></button>
         <button class="tab nav-icon" id="journal-open" type="button" aria-label="Dziennik rzutów" title="Dziennik rzutów" aria-haspopup="dialog" hidden><svg width="24" height="24" viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="15" height="15" rx="3" transform="rotate(-10 10.5 10.5)"/><path d="m19 10 4 .7a3 3 0 0 1 2.4 3.5l-1.7 9.3a3 3 0 0 1-3.5 2.4l-9.3-1.7a3 3 0 0 1-2.4-3.5l.2-1"/><g fill="currentColor" stroke="none"><circle cx="7" cy="7" r="1.3"/><circle cx="10.5" cy="10.5" r="1.3"/><circle cx="14" cy="14" r="1.3"/><circle cx="20" cy="15" r="1.3"/><circle cx="16" cy="21" r="1.3"/></g></svg></button>
@@ -94,9 +94,9 @@
     </main>
     <template id="battle-card-template"><article class="battle-card"><div class="card-top"><div><p class="enemy-tier"></p><h3 class="enemy-name"></h3><p class="enemy-kind"></p></div><div class="card-actions"><button class="icon-button clone" title="Dodaj kopię">⊕</button><button class="icon-button remove" title="Usuń ze starcia">×</button></div></div><div class="combat-stats"><div class="meter"><p>WYTRZYMAŁOŚĆ</p><strong class="endurance-display"></strong><div class="adjusters"><button data-stat="endurance" data-change="-5">−5</button><button data-stat="endurance" data-change="-1">−1</button><button data-stat="endurance" data-change="1">+1</button><button data-stat="endurance" data-change="5">+5</button></div></div><div class="meter hate-meter"><p class="resource-display-label">NIENAWIŚĆ</p><strong class="hate-display"></strong><div class="adjusters"><button data-stat="hate" data-change="-1">−1</button><button data-stat="hate" data-change="1">+1</button></div></div></div><div class="facts"><span>Zajadłość <b class="fierceness-display"></b></span><span>Potęga <b class="might-display"></b></span><span>Obrona <b class="parry-display"></b></span><span>Pancerz <b class="armour-display"></b></span></div><p class="attack-display detail"></p><p class="traits-display detail"></p><button class="defeated">Oznacz jako pokonanego</button></article></template>
     <script src="config.js"></script>
-    <script src="state.js?v=oj4"></script>
-    <script src="cloud-store.js?v=5"></script>
+    <script src="state.js?v=oj6"></script>
+    <script src="cloud-store.js?v=7"></script>
     <script src="supabase-adapter.js?v=3"></script>
-    <script src="bootstrap.js?v=34"></script>
+    <script src="bootstrap.js?v=40"></script>
   </body>
 </html>

@@ -5,20 +5,18 @@
     miserable: false, bonus: 0, hope: false, inspired: false, enemyResource: false, target: '' };
   let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, headerOnly = false;
   let pressStartedInSheet = false;
-  let boundEnemyId = null, boundEnemyName = '', genericConfig = null, boundConfig = null, usingBoundConfig = false;
+  let boundParticipant = null, genericConfig = null;
 
   function currentEnemy() {
-    return boundEnemyId ? root.OneRingStore.getParticipants().find(person => person.id === boundEnemyId && person.type === 'enemy') || null : null;
+    return boundParticipant?.type === 'enemy'
+      ? root.OneRingStore.getParticipants().find(person => person.id === boundParticipant.id && person.type === 'enemy') || null
+      : null;
   }
 
-  function switchActor(actor) {
-    if (!boundEnemyId) { config.actor = actor; return; }
-    if (usingBoundConfig) boundConfig = { ...config };
-    else genericConfig = { ...config };
-    usingBoundConfig = actor === 'enemy';
-    Object.assign(config, usingBoundConfig ? boundConfig : genericConfig);
-    config.actor = actor;
-    setup.querySelector('[data-target]').value = config.target;
+  function currentBoundHero() {
+    return boundParticipant?.type === 'hero'
+      ? root.OneRingStore.getState().heroes.find(hero => hero.id === boundParticipant.heroId) || null
+      : null;
   }
 
   function playerHero() {
@@ -29,8 +27,10 @@
   }
 
   function setupHeading() {
-    const hero = playerHero();
-    return root.OneRingStore.access.role === 'player' ? hero?.name || 'Bez imienia' : 'Rzut';
+    const name = root.OneRingStore.access.role === 'player'
+      ? playerHero()?.name || 'Bez imienia'
+      : boundParticipant?.name || 'Rzut';
+    return root.OneRingStore.access.role === 'gm' && boundParticipant && config.privateRoll ? `${name} (Priv)` : name;
   }
 
   function element(html) {
@@ -49,7 +49,7 @@
           <div class="dice-sheet-head"><h2><button type="button" class="dice-collapse" aria-label="Zwiń ustawienia rzutu" aria-expanded="true" aria-controls="dice-settings"><span id="dice-heading">Rzut</span><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button></h2><button type="button" class="dice-close" aria-label="Zamknij rzut">×</button></div>
           <div class="dice-setup">
             <div id="dice-settings" class="dice-settings">
-            <fieldset class="dice-field"><legend>Kto rzuca?</legend><div class="dice-actor-row"><div class="dice-options" data-choice="actor"><button type="button" data-value="hero">MG</button><button type="button" data-value="enemy">Przeciwnik</button></div><label class="dice-private"><input type="checkbox" data-check="privateRoll"> Priv</label></div></fieldset>
+            <fieldset class="dice-field"><legend>Kto rzuca?</legend><div class="dice-options dice-actors" data-choice="actor"><button type="button" data-value="hero" aria-label="Runa Gandalfa"></button><button type="button" data-value="enemy" aria-label="Oko Saurona"></button></div></fieldset>
             <fieldset class="dice-field"><legend>Kości sukcesu</legend><div class="dice-options dice-counts" data-choice="baseDice"><button type="button" data-value="0">0</button><button type="button" data-value="1">1</button><button type="button" data-value="2">2</button><button type="button" data-value="3">3</button><button type="button" data-value="4">4</button><button type="button" data-value="5">5</button><button type="button" data-value="6">6</button></div></fieldset>
             <fieldset class="dice-field"><legend>Kość działania</legend><div class="dice-options" data-choice="featMode"><button type="button" data-value="weary">Osłabiona</button><button type="button" data-value="normal">Normalna</button><button type="button" data-value="favoured">Wzmocniona</button></div></fieldset>
             <div class="dice-checks"><label><input type="checkbox" data-check="exhausted"> Wyczerpany</label><label class="dice-miserable"><input type="checkbox" data-check="miserable"> Przygnębiony</label></div>
@@ -57,7 +57,7 @@
               <label class="dice-target">PT <span>(opcjonalnie)</span><input type="number" min="0" step="1" inputmode="numeric" data-target></label></div>
             <div class="dice-hope"><label class="dice-hero-resource"><input type="checkbox" data-check="hope"> Wydaj Nadzieję <span>+1k</span></label><label class="dice-enemy-resource" hidden><input type="checkbox" data-check="enemyResource"><span class="dice-spend-text">Wydaj Nienawiść/Determinację</span><span>+1k</span></label><label class="dice-inspired"><input type="checkbox" data-check="inspired"> Natchniony <span>→ +2k</span></label></div>
             </div>
-            <div class="dice-pool" role="status"></div><div class="dice-preview" aria-hidden="true"></div>
+            <div class="dice-pool" role="status"></div><div class="dice-pool-row"><div class="dice-preview" aria-hidden="true"></div><label class="dice-private"><span>Priv</span><input type="checkbox" data-check="privateRoll" aria-label="Rzut prywatny"></label></div>
             <p class="dice-error" role="alert" hidden></p><button type="button" class="dice-roll">Rzuć</button>
           </div>
           <div class="dice-result" hidden></div>
@@ -67,6 +67,8 @@
     </dialog>`);
     document.body.append(launch, dialog);
     setup = dialog.querySelector('.dice-setup');
+    setup.querySelector('[data-choice="actor"] [data-value="hero"]').append(featSymbol(12));
+    setup.querySelector('[data-choice="actor"] [data-value="enemy"]').append(featSymbol(11));
     resultPanel = dialog.querySelector('.dice-result');
     stage = dialog.querySelector('#dice-stage');
     launch.addEventListener('click', open);
@@ -89,7 +91,7 @@
       const choice = event.target.closest('[data-choice] button');
       if (choice) {
         const field = choice.parentElement.dataset.choice;
-        if (field === 'actor') switchActor(choice.dataset.value);
+        if (field === 'actor') { if (!boundParticipant) config.actor = choice.dataset.value; }
         else config[field] = field === 'baseDice' ? Number(choice.dataset.value) : choice.dataset.value;
         renderSetup();
       }
@@ -112,7 +114,8 @@
     const store = root.OneRingStore;
     if (store.access.role === 'player') { config.actor = 'hero'; config.privateRoll = false; }
     if (dialog.dataset.view === 'setup') dialog.querySelector('#dice-heading').textContent = setupHeading();
-    setup.querySelector('[data-choice="actor"]').closest('fieldset').hidden = store.access.role === 'player';
+    setup.querySelector('[data-choice="actor"]').closest('fieldset').hidden = store.access.role === 'player' || !!boundParticipant;
+    setup.querySelector('.dice-private').hidden = store.access.role !== 'gm';
     dialog.dataset.actor = config.actor;
     setup.querySelectorAll('[data-choice]').forEach(group => {
       const field = group.dataset.choice;
@@ -121,14 +124,13 @@
         button.setAttribute('aria-pressed', String(selected));
       });
     });
-    const hero = playerHero();
-    const enemy = usingBoundConfig ? currentEnemy() : null;
-    setup.querySelector('[data-choice="actor"] button[data-value="enemy"]').textContent = boundEnemyId ? boundEnemyName : 'Przeciwnik';
+    const hero = currentBoundHero() || playerHero();
+    const enemy = currentEnemy();
     setup.querySelector('.dice-spend-text').textContent = enemy
       ? (enemy.resourceType === 'determination' ? 'Wydaj Determinację' : 'Wydaj Nienawiść')
       : 'Wydaj Nienawiść/Determinację';
-    if (usingBoundConfig && !(Number(enemy?.hate) > 0)) config.enemyResource = false;
-    if (store.access.role === 'player' && !(Number(hero?.hope) > 0)) {
+    if (boundParticipant?.type === 'enemy' && !(Number(enemy?.hate) > 0)) config.enemyResource = false;
+    if (hero && !(Number(hero.hope) > 0)) {
       config.hope = false;
       config.inspired = false;
     }
@@ -140,8 +142,8 @@
     // PT is a local input draft: snapshots must not overwrite typing or partial numbers.
     setup.querySelector('.dice-bonus-value').textContent = `${config.bonus > 0 ? '+' : ''}${config.bonus}k`;
     setup.querySelectorAll('button, input').forEach(control => { control.disabled = !!pending; });
-    setup.querySelector('[data-check="hope"]').disabled = !!pending || (store.access.role === 'player' && !(Number(hero?.hope) > 0));
-    setup.querySelector('[data-check="enemyResource"]').disabled = !!pending || (usingBoundConfig && !(Number(enemy?.hate) > 0));
+    setup.querySelector('[data-check="hope"]').disabled = !!pending || (!!hero && !(Number(hero.hope) > 0));
+    setup.querySelector('[data-check="enemyResource"]').disabled = !!pending || (boundParticipant?.type === 'enemy' && !(Number(enemy?.hate) > 0));
     setup.querySelector('[data-step="-1"]').disabled = !!pending || config.bonus <= -6;
     setup.querySelector('[data-step="1"]').disabled = !!pending || config.bonus >= 6;
     const pool = root.DiceRules.calculatePool(config);
@@ -197,23 +199,25 @@
     pressStartedInSheet = false;
     setup.querySelector('.dice-error').hidden = true;
     setup.querySelector('.dice-error').textContent = '';
-    const hero = playerHero();
     const selected = root.OneRingStore.access.role === 'gm' ? root.OneRingMap?.getSelectedParticipant?.() : null;
-    if (selected?.type === 'enemy') {
-      boundEnemyId = selected.id;
-      boundEnemyName = selected.name || 'Przeciwnik';
-      genericConfig = { ...config };
-      boundConfig = { ...config, actor: 'enemy', exhausted: !!selected.weary, miserable: false,
-        hope: false, inspired: false, enemyResource: false };
-      usingBoundConfig = true;
-      Object.assign(config, boundConfig);
-    } else {
-      boundEnemyId = null;
-      boundEnemyName = '';
-      genericConfig = boundConfig = null;
-      usingBoundConfig = false;
-    }
+    boundParticipant = selected?.type === 'enemy' || selected?.type === 'hero'
+      ? { id: selected.id, heroId: selected.heroId || null, type: selected.type, name: selected.name || (selected.type === 'hero' ? 'Bez imienia' : 'Przeciwnik') }
+      : null;
+    genericConfig = boundParticipant ? { ...config } : null;
+    if (boundParticipant) {
+      config.actor = boundParticipant.type;
+      config.privateRoll = false;
+      config.exhausted = !!(boundParticipant.type === 'hero' ? currentBoundHero()?.weary : selected.weary);
+      config.miserable = boundParticipant.type === 'hero' && !!currentBoundHero()?.miserable;
+      config.hope = false;
+      config.inspired = false;
+      config.enemyResource = false;
+    } else if (root.OneRingStore.access.role === 'gm') config.privateRoll = true;
+    const hero = currentBoundHero() || playerHero();
     if (hero) {
+      // Postawa sets the opening default; refreshes and subsequent rolls keep manual edits.
+      config.bonus = hero.stance === 'Zapalczywa' ? 1
+        : hero.stance === 'Defensywna' || hero.stance === 'Ostrożna' ? -1 : 0;
       config.exhausted = !!hero.weary;
       config.miserable = !!hero.miserable;
       config.hope = false;
@@ -227,21 +231,17 @@
     dialog.showModal();
     renderSetup();
     resizeStage();
-    setup.querySelector(root.OneRingStore.access.role === 'player' ? '[data-choice="baseDice"] button[aria-pressed="true"]' : '[data-choice="actor"] button[aria-pressed="true"]').focus();
+    setup.querySelector(root.OneRingStore.access.role === 'player' || boundParticipant ? '[data-choice="baseDice"] button[aria-pressed="true"]' : '[data-choice="actor"] button[aria-pressed="true"]').focus();
   }
 
   function close() {
     if (!dialog || !dialog.open) return;
     generation++;
     dialog.close();
-    if (boundEnemyId) {
-      if (!usingBoundConfig) genericConfig = { ...config };
+    if (boundParticipant) {
       Object.assign(config, genericConfig);
-      boundEnemyId = null;
-      boundEnemyName = '';
-      genericConfig = boundConfig = null;
-      usingBoundConfig = false;
     }
+    boundParticipant = genericConfig = null;
     pressStartedInSheet = false;
     if (root.DiceEngine && typeof root.DiceEngine.clear === 'function') root.DiceEngine.clear();
     if (opener && typeof opener.focus === 'function' && opener.isConnected) opener.focus();
@@ -332,7 +332,7 @@
     setup.hidden = true;
     resultPanel.hidden = false;
     dialog.dataset.view = 'result';
-    dialog.querySelector('#dice-heading').textContent = 'Wynik';
+    dialog.querySelector('#dice-heading').textContent = boundParticipant && config.privateRoll ? 'Wynik (Priv)' : 'Wynik';
     renderCollapse();
     again.focus();
   }
@@ -349,16 +349,16 @@
     }
     config.target = targetInput.value;
     setup.querySelector('.dice-error').hidden = true;
-    if (root.OneRingStore.access.role === 'player' && config.hope && !(Number(playerHero()?.hope) > 0)) {
+    if ((root.OneRingStore.access.role === 'player' || boundParticipant?.type === 'hero') && config.hope && !(Number((currentBoundHero() || playerHero())?.hope) > 0)) {
       showError('Brak Nadziei — wyłącz jej wydawanie przed rzutem.');
       renderSetup();
       return;
     }
-    if (usingBoundConfig && !currentEnemy()) {
-      showError('Ten przeciwnik został usunięty. Zamknij i otwórz panel kości ponownie.');
+    if (boundParticipant && !(boundParticipant.type === 'enemy' ? currentEnemy() : currentBoundHero())) {
+      showError(`${boundParticipant.type === 'enemy' ? 'Ten przeciwnik' : 'Ten bohater'} został usunięty. Zamknij i otwórz panel kości ponownie.`);
       return;
     }
-    if (usingBoundConfig && config.enemyResource && !(Number(currentEnemy()?.hate) > 0)) {
+    if (boundParticipant?.type === 'enemy' && config.enemyResource && !(Number(currentEnemy()?.hate) > 0)) {
       showError('Brak Nienawiści lub Determinacji — wyłącz jej wydawanie przed rzutem.');
       renderSetup();
       return;
@@ -370,7 +370,9 @@
     const token = ++generation;
     const snapshot = { ...config };
     let prepared;
-    try { prepared = root.OneJournalRolls.prepare(snapshot, undefined, usingBoundConfig ? boundEnemyId : null); }
+    try { prepared = root.OneJournalRolls.prepare(snapshot, undefined,
+      boundParticipant?.type === 'enemy' ? boundParticipant.id : null,
+      boundParticipant?.type === 'hero' ? boundParticipant.heroId : null); }
     catch (error) { showError(error.message); return; }
     const pool = root.DiceRules.calculatePool(snapshot);
     const button = setup.querySelector('.dice-roll');

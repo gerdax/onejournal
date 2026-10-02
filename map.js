@@ -267,16 +267,13 @@
   const isPlayer = () => store.access?.role === 'player';
   const viewSelection = () => isPlayer() ? store.getParticipants().find(p => p.type === 'hero' && p.heroId === store.access.heroId)?.id || null : store.selection || null;
   const canSave = () => store.connection === 'online' && store.canWrite;
-  let currentMap = null, selected = null, pendingSelection = null, zoom = 1, offsetX = 0, offsetY = 0, fittedKey = '', gesture = null;
+  let currentMap = null, selected = null, pendingSelection, selectionSequence = 0, selectionWrite = Promise.resolve(), zoom = 1, offsetX = 0, offsetY = 0, fittedKey = '', gesture = null;
   const touchPoints = new Map();
-  let touchLocked = false, touchGesture = null, suppressTouchClick = false;
+  let touchLocked = false, touchGesture = null, touchToken = null, suppressTouchClick = false;
   const el = (tag, className, textValue) => { const node = doc.createElement(tag); if (className) node.className = className; if (textValue != null) node.textContent = textValue; return node; };
   const svg = (tag, attrs, parent) => { const node = doc.createElementNS(SVG, tag); Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, String(value))); if (parent) parent.appendChild(node); return node; };
-  section.innerHTML = '<div class="section-heading map-heading"><h2>Potyczka</h2><div class="map-heading-actions"><button type="button" class="text-button" id="map-add-heroes">Dodaj bohaterów</button><button type="button" class="text-button" id="map-clear">Wyczyść potyczkę</button></div></div><div class="map-toolbar paper"><label>Sceneria<select id="map-scene"></select></label><label>Rozmiar<select id="map-size"><option value="small">Mały</option><option value="medium" selected>Średni</option><option value="large">Duży</option></select></label><button class="primary" id="map-generate" type="button">Wygeneruj mapę</button></div><p class="map-error" id="map-error" role="alert" hidden></p><div class="map-layout"><div class="map-viewport" id="map-viewport" aria-label="Mapa starcia"><div class="map-stage" id="map-stage"><svg id="map-terrain" aria-hidden="true"></svg><div id="map-tokens"></div></div><div class="map-blank" id="map-blank"><span>✦</span><p>Wybierz scenerię i rozmiar, aby utworzyć mapę.</p></div><div class="map-zoom-controls map-fullscreen-controls"><button type="button" id="map-fullscreen" aria-label="Rozwiń mapę na całe okno" title="Rozwiń mapę na całe okno" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div><div class="map-zoom-controls map-center-controls"><button type="button" id="map-center" aria-label="Wyśrodkuj na aktywnej postaci" title="Wyśrodkuj na aktywnej postaci" disabled><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/></svg></button></div><div class="map-zoom-controls" role="group" aria-label="Powiększenie mapy"><button type="button" id="map-fit">Dopasuj</button><button type="button" id="map-zoom-out" aria-label="Pomniejsz mapę">−</button><button type="button" id="map-zoom-in" aria-label="Powiększ mapę">+</button></div></div><aside class="map-panel paper" id="map-panel" aria-live="polite"></aside></div>';
-  const sceneInput = doc.getElementById('map-scene'), sizeInput = doc.getElementById('map-size');
-  for (const [value, label] of Object.entries(SCENES)) { const option = doc.createElement('option'); option.value = value; option.textContent = label; sceneInput.appendChild(option); }
-  sceneInput.value = 'clearing';
-  const generateButton = doc.getElementById('map-generate'), viewport = doc.getElementById('map-viewport'), stage = doc.getElementById('map-stage');
+  section.innerHTML = '<div class="section-heading map-heading"><h2>Potyczka</h2><div class="map-heading-actions"><button type="button" class="text-button" id="map-library-open" aria-haspopup="dialog">Sceneria</button><button type="button" class="text-button" id="map-add-heroes">Dodaj bohaterów</button><button type="button" class="text-button" id="map-clear">Wyczyść potyczkę</button></div></div><p class="map-error" id="map-error" role="alert" hidden></p><div class="map-layout"><div class="map-viewport" id="map-viewport" aria-label="Mapa starcia"><div class="map-stage" id="map-stage"><svg id="map-terrain" aria-hidden="true"></svg><div id="map-tokens"></div></div><div class="map-blank" id="map-blank"><span>✦</span><p>Wybierz scenerię, by utworzyć potyczkę.</p></div><div class="map-zoom-controls map-fullscreen-controls"><button type="button" id="map-fullscreen" aria-label="Rozwiń mapę na całe okno" title="Rozwiń mapę na całe okno" aria-pressed="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div><div class="map-zoom-controls map-center-controls"><button type="button" id="map-center" aria-label="Wyśrodkuj na aktywnej postaci" title="Wyśrodkuj na aktywnej postaci" disabled><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/></svg></button></div><div class="map-zoom-controls" role="group" aria-label="Powiększenie mapy"><button type="button" id="map-fit">Dopasuj</button><button type="button" id="map-zoom-out" aria-label="Pomniejsz mapę">−</button><button type="button" id="map-zoom-in" aria-label="Powiększ mapę">+</button></div></div><aside class="map-panel paper" id="map-panel" aria-live="polite"></aside></div>';
+  const viewport = doc.getElementById('map-viewport'), stage = doc.getElementById('map-stage');
   const terrainSvg = doc.getElementById('map-terrain'), tokens = doc.getElementById('map-tokens'), panel = doc.getElementById('map-panel'), blank = doc.getElementById('map-blank'), errorBox = doc.getElementById('map-error');
   async function run(action) { if (!canSave()) { errorBox.textContent = 'Brak połączenia lub uprawnień do zapisu.'; errorBox.hidden = false; return false; } try { await action(); errorBox.hidden = true; return true; } catch (error) { errorBox.textContent = error && error.message ? error.message : 'Nie udało się zapisać zmiany mapy.'; errorBox.hidden = false; return false; } }
   function shape(record, parent) {
@@ -300,6 +297,7 @@
     terrainSvg.replaceChildren();
     terrainSvg.setAttribute('viewBox', `0 0 ${map.width} ${map.height}`);
     terrainSvg.setAttribute('width', map.width); terrainSvg.setAttribute('height', map.height);
+    if (map.kind === 'image') return;
     const scene = SCENES[map.scene] ? map.scene : 'clearing';
     svg('rect', { width: map.width, height: map.height, fill: { forest: '#a2aa80', forest_clearing: '#a2aa80', forest_crossroads: '#a2aa80', road: '#aaad87', river: '#a7ae89', river_ford: '#a7ae89', marsh: '#899b7d', ravine: '#9b9986', clearing: '#b9bd91', ruins: '#afa997', cave: '#777a71' }[scene] }, terrainSvg);
     const rng = randomFor(map.seed + '-ground');
@@ -369,12 +367,22 @@
     const names = displayNames(participants);
     participants.forEach((person, index) => {
       const pos = map.positions[person.id]; if (!pos) return;
-      const marker = el('button', 'map-token ' + (person.type === 'hero' ? 'hero-token' : 'enemy-token') + (person.defeated ? ' is-defeated' : '') + (selected === person.id ? ' is-selected' : ''));
+      const marker = el('button', 'map-token ' + (person.type === 'hero' ? 'hero-token' : 'enemy-token') + (person.defeated ? ' is-defeated' : '') + (selected === person.id ? ' is-selected' : '') + (isPlayer() ? ' is-player-token' : ''));
       marker.type = 'button'; marker.dataset.id = person.id; marker.style.left = clamp(pos.x, 30, map.width - 30) + 'px'; marker.style.top = clamp(pos.y, 30, map.height - 30) + 'px';
       marker.setAttribute('aria-label', `${names[index]}, ${person.type === 'hero' ? 'bohater' : 'przeciwnik'}${person.defeated ? ', pokonany' : ''}.${isPlayer() ? '' : ' Strzałki przesuwają znacznik.'}`);
       if (isPlayer()) marker.tabIndex = -1;
       const symbol = el('span', 'map-token-symbol', person.type === 'hero' ? '✦' : '◆'); const label = el('span', 'map-token-label', names[index]); marker.append(symbol, label); tokens.appendChild(marker);
     });
+    if (touchToken) {
+      touchToken.node = Array.from(tokens.children).find(node => node.dataset.id === touchToken.id) || touchToken.node;
+      if (Number.isFinite(touchToken.nextX)) {
+        touchToken.node.style.left = clamp(touchToken.nextX, 30, map.width - 30) + 'px';
+        touchToken.node.style.top = clamp(touchToken.nextY, 30, map.height - 30) + 'px';
+      }
+    }
+  }
+  function paintSelectedMarkers() {
+    tokens.querySelectorAll('.map-token').forEach(node => node.classList.toggle('is-selected', node.dataset.id === selected));
   }
   function addAdjuster(container, id, field, value, max, title, warning = false) {
     const box = el('div', 'map-resource'); box.dataset.field = field; box.appendChild(el('span', '', title));
@@ -404,7 +412,8 @@
   enemySheet.appendChild(enemyDetails);
   const enemyNotes = el('details', 'sheet-disclosure map-enemy-details');
   enemyNotes.id = 'map-enemy-notes'; enemyNotes.hidden = true;
-  const enemyNotesBody = el('p', 'map-panel-detail');
+  const enemyNotesBody = el('div');
+  const notesEditor = root.OneRingEnemyNotes.mount(enemyNotesBody, store);
   enemyNotes.append(el('summary', '', 'Notatki'), enemyNotesBody);
   enemySheet.appendChild(enemyNotes);
   const lastSelectedByType = { hero: null, enemy: null };
@@ -415,11 +424,12 @@
     panel.hidden = false;
     heroSheet.show(isPlayer() ? ownParticipant?.heroId || null : !store.loadError && currentMap && selectedHero ? selectedHero.heroId : null);
     enemySheet.hidden = true; enemyDetails.hidden = true; enemyNotes.hidden = true;
+    notesEditor.show(null);
     panel.replaceChildren();
     panel.classList.remove('is-defeated');
-    if (isPlayer()) { enemyDetailBody.replaceChildren(); enemyNotesBody.textContent = ''; if (!ownParticipant) { panel.append(el('p', 'eyebrow', 'BOHATER POZA POTYCZKĄ'), el('p', 'map-panel-help', 'Twój bohater nie uczestniczy w potyczce. Mistrz gry może go do niej dodać.')); return; } }
+    if (isPlayer()) { enemyDetailBody.replaceChildren(); if (!ownParticipant) { panel.append(el('p', 'eyebrow', 'BOHATER POZA POTYCZKĄ'), el('p', 'map-panel-help', 'Twój bohater nie uczestniczy w potyczce. Mistrz gry może go do niej dodać.')); return; } }
     if (store.loadError) { panel.append(el('p', 'eyebrow', 'BŁĄD ZAPISU'), el('h3', '', 'Nie można wczytać danych'), el('p', 'map-panel-help', 'Przywróć poprawną kopię zapasową, aby ponownie korzystać z mapy.')); return; }
-    if (!currentMap && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Stwórz mapę, by zobaczyć dodanych uczestników')); return; }
+    if (!currentMap && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Wybierz scenerię, by zobaczyć dodanych uczestników')); return; }
     if (!participants.length && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dodaj bohatera lub przeciwnika do aktywnej walki.')); return; }
     const names = displayNames(participants), index = participants.findIndex(p => isPlayer() ? p.type === 'hero' && p.heroId === store.access.heroId : p.id === selected);
     const person = participants[index];
@@ -428,9 +438,11 @@
     const heading = el('div', 'map-panel-heading');
     if (isPlayer()) heading.append(el('p', 'eyebrow', 'BOHATER'));
     else {
-      const previous = el('button', 'map-cycle-prev', '‹'), next = el('button', 'map-cycle-next', '›');
+      const previous = el('button', 'map-cycle-prev', '‹'), next = el('button', 'map-cycle-next', '›'), deselect = el('button', 'map-deselect', '⊘');
       const typeName = person.type === 'hero' ? 'bohater' : 'przeciwnik';
       previous.type = next.type = 'button';
+      deselect.type = 'button'; deselect.title = 'Odznacz postać'; deselect.setAttribute('aria-label', deselect.title);
+      deselect.addEventListener('click', () => selectParticipant(null));
       previous.setAttribute('aria-label', `Poprzedni ${typeName}`);
       next.setAttribute('aria-label', `Następny ${typeName}`);
       const peerCount = participants.filter(p => p.type === person.type).length;
@@ -440,7 +452,7 @@
         const replacement = panel.querySelector(direction < 0 ? '.map-cycle-prev' : '.map-cycle-next');
         if (replacement) replacement.focus();
       });
-      const navigation = el('div', 'map-panel-navigation'); navigation.append(previous, next);
+      const navigation = el('div', 'map-panel-navigation'); navigation.append(deselect, previous, next);
       lastSelectedByType[person.type] = person.id;
       const otherType = person.type === 'hero' ? 'enemy' : 'hero';
       const otherParticipants = participants.filter(item => item.type === otherType);
@@ -519,8 +531,8 @@
         wounds.appendChild(input);
       });
       panel.appendChild(wounds);
-      enemySheet.hidden = false; enemyDetails.hidden = false; enemyNotes.hidden = !String(person.notes || '').trim();
-      enemyNotesBody.textContent = person.notes || 'Brak notatek.';
+      enemySheet.hidden = false; enemyDetails.hidden = false; enemyNotes.hidden = false;
+      notesEditor.show(person.id);
       enemyDetailBody.replaceChildren();
       for (const [label, value] of [['Biegłości bojowe', person.attack], ['Atrybuty', person.traits]]) {
         const block = el('div');
@@ -538,23 +550,23 @@
   function zoomAt(factor, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) { if (!currentMap) return; const next = clamp(zoom * factor, .1, 3); offsetX = x - (x - offsetX) * next / zoom; offsetY = y - (y - offsetY) * next / zoom; zoom = next; transform(); }
   function refresh(snapshot) {
     const map = snapshot.map, participants = store.getParticipants();
-    selected = viewSelection();
-    const key = map ? JSON.stringify([map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
+    selected = pendingSelection !== undefined ? pendingSelection : viewSelection();
+    const key = map ? JSON.stringify(map.kind === 'image' ? [map.kind, map.imageId, map.width, map.height] : [map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
     const terrainChanged = key !== fittedKey;
-    if (terrainChanged) { gesture = null; touchPoints.clear(); touchGesture = null; touchLocked = false; }
+    if (terrainChanged) { gesture = null; touchPoints.clear(); touchGesture = null; touchToken = null; touchLocked = false; }
     currentMap = map;
     blank.hidden = !!map; stage.hidden = !map;
-    if (isPlayer()) blank.querySelector('p').textContent = 'Mistrz gry nie przygotował jeszcze mapy.';
-    generateButton.textContent = 'Wygeneruj mapę'; generateButton.disabled = !!store.loadError || isPlayer() || !canSave();
+    if (isPlayer()) blank.querySelector('p').textContent = 'Mistrz gry nie przygotował jeszcze scenerii.';
+    doc.getElementById('map-library-open').disabled = !!store.loadError || isPlayer();
     section.querySelector('.map-heading-actions').hidden = isPlayer();
-    section.querySelector('.map-toolbar').hidden = isPlayer();
     if (store.loadError) { errorBox.textContent = 'Nie można zapisać mapy: zapisane dane są uszkodzone. Przywróć poprawną kopię zapasową.'; errorBox.hidden = false; }
     if (map) {
-      if (terrainChanged) { sceneInput.value = SCENES[map.scene] ? map.scene : 'clearing'; sizeInput.value = SIZES[map.size] ? map.size : 'medium'; }
       stage.style.width = map.width + 'px'; stage.style.height = map.height + 'px';
       if (terrainChanged) { paintTerrain(map); fittedKey = key; root.requestAnimationFrame(fit); }
-      renderTokens(map, participants);
-    } else { fittedKey = ''; tokens.replaceChildren(); }
+      root.OneRingMapLibrary?.showActiveImage(map, terrainSvg, store);
+      if (touchToken && !terrainChanged) paintSelectedMarkers();
+      else renderTokens(map, participants);
+    } else { fittedKey = ''; tokens.replaceChildren(); root.OneRingMapLibrary?.showActiveImage(null, terrainSvg, store); }
     renderPanel(participants);
   }
   doc.getElementById('map-add-heroes').addEventListener('click', () => run(async () => {
@@ -567,11 +579,7 @@
   doc.getElementById('map-clear').addEventListener('click', () => {
     if (root.confirm('Wyczyścić potyczkę? Mapa i wszyscy uczestnicy zostaną usunięci z potyczki. Arkusze bohaterów i biblioteka pozostaną zachowane.')) run(() => store.clearEncounter());
   });
-  generateButton.addEventListener('click', () => {
-    if (currentMap && store.getParticipants().length > 0 && !root.confirm('Wygenerować nową mapę? Rozstawienie znaczników zostanie wyzerowane.')) return;
-    const seed = root.crypto && root.crypto.getRandomValues ? root.crypto.getRandomValues(new Uint32Array(2)).join('-') : String(Date.now()) + '-' + Math.random();
-    run(() => store.setMap(generateTerrain(sceneInput.value, sizeInput.value, seed)));
-  });
+  root.OneRingMapLibrary?.init({ store, openButton: doc.getElementById('map-library-open') });
   doc.getElementById('map-zoom-in').addEventListener('click', () => zoomAt(1.25));
   doc.getElementById('map-zoom-out').addEventListener('click', () => zoomAt(.8));
   doc.getElementById('map-fit').addEventListener('click', fit);
@@ -595,7 +603,7 @@
   function setExpanded(value) {
     if (expanded === value) return;
     desktopPress = null; lastBackgroundClick = false; backgroundDoubleClick = false;
-    restoreTokenDrag(); touchPoints.clear(); touchGesture = null; touchLocked = false;
+    restoreTokenDrag(); if (touchToken) restoreTokenNode(touchToken); touchToken = null; touchPoints.clear(); touchGesture = null; touchLocked = false;
     expanded = value;
     viewport.classList.toggle('is-fullscreen', value);
     fullscreenButton.setAttribute('aria-pressed', String(value));
@@ -650,14 +658,15 @@
     if (gesture && gesture.type === 'token') {
       gesture.node.style.left = gesture.x + 'px';
       gesture.node.style.top = gesture.y + 'px';
-      selected = viewSelection();
+      selected = pendingSelection !== undefined ? pendingSelection : viewSelection();
       renderPanel(store.getParticipants());
       tokens.querySelectorAll('.map-token').forEach(node => node.classList.toggle('is-selected', node.dataset.id === selected));
     }
     gesture = null;
   }
   function startTouchGesture() {
-    restoreTokenDrag();
+    if (touchToken) restoreTokenNode(touchToken);
+    touchToken = null;
     touchLocked = true;
     suppressTouchClick = true;
     const [a, b] = Array.from(touchPoints.entries());
@@ -666,61 +675,112 @@
     const midpointY = (a[1].y + b[1].y) / 2 - box.top - viewport.clientTop;
     touchGesture = { ids: [a[0], b[0]], distance: Math.max(1, Math.hypot(a[1].x - b[1].x, a[1].y - b[1].y)), zoom, mapX: (midpointX - offsetX) / zoom, mapY: (midpointY - offsetY) / zoom };
   }
+  viewport.addEventListener('touchstart', event => {
+    if (!currentMap || event.target.closest('.map-zoom-controls, .dice-launch, .dice-dialog')) return;
+    touchPoints.clear();
+    for (const touch of event.touches) touchPoints.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
+    if (event.touches.length > 1) {
+      if (event.touches.length === 2 && !touchLocked) startTouchGesture();
+      else { if (touchToken) restoreTokenNode(touchToken); touchToken = null; touchLocked = true; touchGesture = null; suppressTouchClick = true; }
+      event.preventDefault();
+      return;
+    }
+    touchLocked = false;
+    suppressTouchClick = false;
+    const marker = event.target.closest('.map-token');
+    if (!marker || isPlayer() || !canSave()) { if (expanded) event.preventDefault(); return; }
+    const touch = event.changedTouches[0], id = marker.dataset.id, previousSelection = selected;
+    const pos = currentMap.positions[id];
+    touchToken = { id, node: marker, identifier: touch.identifier, previousSelection, startX: touch.clientX, startY: touch.clientY, x: pos.x, y: pos.y, moved: false };
+    if (id !== selected) selectParticipant(id);
+    suppressTouchClick = true;
+    event.preventDefault();
+  }, { passive: false });
+  viewport.addEventListener('touchmove', event => {
+    touchPoints.clear();
+    for (const touch of event.touches) touchPoints.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
+    if (touchGesture && event.touches.length >= 2 && currentMap) {
+      event.preventDefault();
+      const [a, b] = touchGesture.ids.map(id => touchPoints.get(id));
+      if (!a || !b) return;
+      const box = viewport.getBoundingClientRect();
+      const nextZoom = clamp(touchGesture.zoom * Math.hypot(a.x - b.x, a.y - b.y) / touchGesture.distance, .1, 3);
+      offsetX = (a.x + b.x) / 2 - box.left - viewport.clientLeft - touchGesture.mapX * nextZoom;
+      offsetY = (a.y + b.y) / 2 - box.top - viewport.clientTop - touchGesture.mapY * nextZoom;
+      zoom = nextZoom;
+      transform();
+      return;
+    }
+    if (touchLocked) { event.preventDefault(); return; }
+    if (!touchToken || !currentMap) { if (expanded) event.preventDefault(); return; }
+    const touch = Array.from(event.touches).find(item => item.identifier === touchToken.identifier);
+    if (!touch) return;
+    event.preventDefault();
+    if (Math.hypot(touch.clientX - touchToken.startX, touch.clientY - touchToken.startY) > 5) touchToken.moved = true;
+    if (!touchToken.moved) return;
+    const x = clamp(Math.round(touchToken.x + (touch.clientX - touchToken.startX) / zoom), 0, currentMap.width - 1);
+    const y = clamp(Math.round(touchToken.y + (touch.clientY - touchToken.startY) / zoom), 0, currentMap.height - 1);
+    touchToken.node.style.left = clamp(x, 30, currentMap.width - 30) + 'px';
+    touchToken.node.style.top = clamp(y, 30, currentMap.height - 30) + 'px';
+    touchToken.nextX = x; touchToken.nextY = y;
+  }, { passive: false });
+  function finishTouch(event) {
+    touchPoints.clear();
+    for (const touch of event.touches) touchPoints.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
+    if (touchLocked) {
+      event.preventDefault();
+      if (event.touches.length < 2) touchGesture = null;
+      if (!event.touches.length) touchLocked = false;
+      return;
+    }
+    if (!touchToken) return;
+    const touch = Array.from(event.changedTouches).find(item => item.identifier === touchToken.identifier);
+    if (!touch) return;
+    event.preventDefault();
+    const done = touchToken; touchToken = null;
+    if (event.type !== 'touchend') { restoreTokenNode(done); return; }
+    const moved = done.moved || Math.hypot(touch.clientX - done.startX, touch.clientY - done.startY) > 5;
+    if (moved && Number.isFinite(done.nextX)) run(() => store.moveToken(done.id, done.nextX, done.nextY)).then(ok => { if (!ok && done.node.isConnected) restoreTokenNode(done); });
+    else if (!moved && done.previousSelection === done.id) selectParticipant(null);
+  }
+  viewport.addEventListener('touchend', finishTouch, { passive: false });
+  viewport.addEventListener('touchcancel', finishTouch, { passive: false });
   viewport.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'touch') return;
     if (desktopPointer()) {
       desktopPress = event.button === 0 && event.pointerType === 'mouse' && currentMap ? { id: event.pointerId, x: event.clientX, y: event.clientY, background: mapBackground(event.target), moved: false } : null;
       if (!desktopPress || !desktopPress.background) lastBackgroundClick = false;
       backgroundDoubleClick = false;
     }
     if (event.button !== 0) return;
-    if (event.target.closest('.map-zoom-controls, .dice-launch, .dice-dialog')) {
-      if (event.pointerType === 'touch' && !touchPoints.size) suppressTouchClick = false;
-      return;
-    }
+    if (event.target.closest('.map-zoom-controls, .dice-launch, .dice-dialog')) return;
     if (!currentMap) return;
-    if (event.pointerType === 'touch') {
-      if (!touchPoints.size) suppressTouchClick = false;
-      touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      viewport.setPointerCapture(event.pointerId);
-      if (touchPoints.size === 2 && !touchLocked) startTouchGesture();
-      if (touchPoints.size > 2) { touchLocked = true; suppressTouchClick = true; touchGesture = null; }
-      event.preventDefault();
-      if (touchLocked || !event.isPrimary) return;
-    }
-    if (gesture || touchLocked) return;
-    const marker = event.target.closest('.map-token');
+    if (gesture) return;
+    let marker = event.target.closest('.map-token');
     if (marker && !isPlayer() && canSave()) {
       marker.focus();
       const previousSelection = selected;
-      selectParticipant(marker.dataset.id);
-      const pos = currentMap.positions[selected]; gesture = { type: 'token', id: selected, node: marker, previousSelection, startX: event.clientX, startY: event.clientY, x: pos.x, y: pos.y };
-    } else if (event.pointerType !== 'touch') gesture = { type: 'pan', startX: event.clientX, startY: event.clientY, x: offsetX, y: offsetY };
+      const id = marker.dataset.id;
+      if (id !== selected) {
+        selectParticipant(id);
+        marker = Array.from(tokens.children).find(node => node.dataset.id === id) || marker;
+        marker.focus();
+      }
+      const pos = currentMap.positions[id]; gesture = { type: 'token', id, node: marker, previousSelection, startX: event.clientX, startY: event.clientY, x: pos.x, y: pos.y, moved: false };
+    } else gesture = { type: 'pan', startX: event.clientX, startY: event.clientY, x: offsetX, y: offsetY };
     if (!gesture) return;
     gesture.pointerId = event.pointerId;
     viewport.setPointerCapture(event.pointerId); event.preventDefault();
   });
   viewport.addEventListener('pointermove', event => {
+    if (event.pointerType === 'touch') return;
     if (desktopPress && desktopPress.id === event.pointerId && Math.hypot(event.clientX - desktopPress.x, event.clientY - desktopPress.y) > 5) desktopPress.moved = true;
-    if (event.pointerType === 'touch' && touchPoints.has(event.pointerId)) {
-      touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (touchGesture && currentMap) {
-        const [a, b] = touchGesture.ids.map(id => touchPoints.get(id));
-        if (a && b) {
-          const box = viewport.getBoundingClientRect();
-          const nextZoom = clamp(touchGesture.zoom * Math.hypot(a.x - b.x, a.y - b.y) / touchGesture.distance, .1, 3);
-          offsetX = (a.x + b.x) / 2 - box.left - viewport.clientLeft - touchGesture.mapX * nextZoom;
-          offsetY = (a.y + b.y) / 2 - box.top - viewport.clientTop - touchGesture.mapY * nextZoom;
-          zoom = nextZoom;
-          transform();
-        }
-      }
-      if (touchLocked) return;
-    }
     if (!gesture || event.pointerId !== gesture.pointerId || !currentMap) return;
     if (gesture.type === 'pan') { offsetX = gesture.x + event.clientX - gesture.startX; offsetY = gesture.y + event.clientY - gesture.startY; transform(); }
-    else { const x = clamp(Math.round(gesture.x + (event.clientX - gesture.startX) / zoom), 0, currentMap.width - 1), y = clamp(Math.round(gesture.y + (event.clientY - gesture.startY) / zoom), 0, currentMap.height - 1); gesture.node.style.left = clamp(x, 30, currentMap.width - 30) + 'px'; gesture.node.style.top = clamp(y, 30, currentMap.height - 30) + 'px'; gesture.nextX = x; gesture.nextY = y; }
+    else { if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 5) gesture.moved = true; if (!gesture.moved) return; const x = clamp(Math.round(gesture.x + (event.clientX - gesture.startX) / zoom), 0, currentMap.width - 1), y = clamp(Math.round(gesture.y + (event.clientY - gesture.startY) / zoom), 0, currentMap.height - 1); gesture.node.style.left = clamp(x, 30, currentMap.width - 30) + 'px'; gesture.node.style.top = clamp(y, 30, currentMap.height - 30) + 'px'; gesture.nextX = x; gesture.nextY = y; }
   });
   function finishGesture(event) {
+    if (event.pointerType === 'touch') return;
     if (desktopPress && event.pointerId === desktopPress.id) {
       const press = desktopPress; desktopPress = null;
       const background = event.type === 'pointerup' && press.background && !press.moved && Math.hypot(event.clientX - press.x, event.clientY - press.y) <= 5 && mapBackground(doc.elementFromPoint(event.clientX, event.clientY));
@@ -729,18 +789,12 @@
         lastBackgroundClick = true;
       } else { lastBackgroundClick = false; backgroundDoubleClick = false; }
     }
-    if (event.pointerType === 'touch' && touchPoints.has(event.pointerId)) {
-      touchPoints.delete(event.pointerId);
-      if (touchLocked) {
-        touchGesture = null;
-        if (!touchPoints.size) touchLocked = false;
-        return;
-      }
-    }
     if (!gesture || event.pointerId !== gesture.pointerId) return;
     const done = gesture; gesture = null;
     if (event.type !== 'pointerup') { if (done.type === 'token') restoreTokenNode(done); return; }
-    if (done.type === 'token' && Number.isFinite(done.nextX)) run(() => store.moveToken(done.id, done.nextX, done.nextY)).then(ok => { if (!ok && done.node.isConnected) restoreTokenNode(done); });
+    const moved = done.type === 'token' && (done.moved || Math.hypot(event.clientX - done.startX, event.clientY - done.startY) > 5);
+    if (moved && Number.isFinite(done.nextX)) run(() => store.moveToken(done.id, done.nextX, done.nextY)).then(ok => { if (!ok && done.node.isConnected) restoreTokenNode(done); });
+    else if (done.type === 'token' && !moved && done.previousSelection === done.id) selectParticipant(null);
   }
   function restoreTokenNode(done) { done.node.style.left = done.x + 'px'; done.node.style.top = done.y + 'px'; }
   viewport.addEventListener('pointerup', finishGesture); viewport.addEventListener('pointercancel', finishGesture); viewport.addEventListener('lostpointercapture', finishGesture);
@@ -749,24 +803,34 @@
     backgroundDoubleClick = false; lastBackgroundClick = false;
     setExpanded(!expanded);
   });
-  viewport.addEventListener('click', event => { if (event.target.closest('.dice-launch, .dice-dialog')) return; if (suppressTouchClick && event.pointerType === 'touch') { event.preventDefault(); event.stopPropagation(); } }, true);
-  tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker || isPlayer()) return; selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
-  tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(marker.dataset.id); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(marker.dataset.id); const pos = currentMap.positions[selected], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(selected, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === selected); if (next) next.focus(); });
+  viewport.addEventListener('click', event => { if (event.target.closest('.map-zoom-controls, .dice-launch, .dice-dialog')) return; if (suppressTouchClick && event.pointerType === 'touch') { event.preventDefault(); event.stopPropagation(); } }, true);
+  tokens.addEventListener('click', event => { const marker = event.target.closest('.map-token'); if (!marker || isPlayer() || event.detail) return; const id = marker.dataset.id; selectParticipant(selected === id ? null : id); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); });
+  tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; const id = marker.dataset.id; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(selected === id ? null : id); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(id); const pos = currentMap.positions[id], step = event.shiftKey ? 20 : 5; run(() => store.moveToken(id, pos.x + d[0] * step, pos.y + d[1] * step)); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); });
   if (root.ResizeObserver) new root.ResizeObserver(() => { if (currentMap && section.classList.contains('active') && viewport.clientWidth && viewport.clientHeight && !gesture && !touchPoints.size) fit(); }).observe(viewport);
   doc.addEventListener('one-ring:tab', event => { if (event.detail === 'map' || event.detail && event.detail.tab === 'map') root.requestAnimationFrame(() => { if (currentMap && viewport.clientWidth) fit(); }); });
   store.subscribe(refresh); refresh(store.getState());
   function selectParticipant(id) {
     if (isPlayer() || !canSave()) return;
     const participants = store.getParticipants();
-    if (!participants.some(person => person.id === id)) return;
-    if (id === pendingSelection || id === store.selection) return;
+    if (id !== null && !participants.some(person => person.id === id)) return;
+    if (id === selected) return;
+    const sequence = ++selectionSequence;
     pendingSelection = id;
     selected = id;
-    if (currentMap) renderTokens(currentMap, participants);
+    if (currentMap) { if (touchToken) paintSelectedMarkers(); else renderTokens(currentMap, participants); }
     renderPanel(participants);
-    run(() => store.selectToken(id)).then(ok => { if (pendingSelection !== id) return; pendingSelection = null; if (!ok) { selected = viewSelection(); if (currentMap) renderTokens(currentMap, store.getParticipants()); renderPanel(store.getParticipants()); } });
+    selectionWrite = selectionWrite.then(async () => {
+      if (sequence !== selectionSequence) return;
+      await run(() => store.selectToken(id));
+      if (sequence !== selectionSequence) return;
+      pendingSelection = undefined;
+      selected = viewSelection();
+      const latestParticipants = store.getParticipants();
+      if (currentMap) { if (touchToken) paintSelectedMarkers(); else renderTokens(currentMap, latestParticipants); }
+      renderPanel(latestParticipants);
+    });
   }
   root.OneRingMap = { generateTerrain, fit, selectParticipant,
-    getSelectedParticipant: () => store.getParticipants().find(person => person.id === (pendingSelection || selected)) || null
+    getSelectedParticipant: () => store.getParticipants().find(person => person.id === selected) || null
   };
 })(typeof window !== 'undefined' ? window : null);
