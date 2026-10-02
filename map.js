@@ -431,7 +431,7 @@
     panel.classList.remove('is-defeated');
     if (isPlayer()) { enemyDetailBody.replaceChildren(); if (!ownParticipant) { panel.append(el('p', 'eyebrow', 'BOHATER POZA POTYCZKĄ'), el('p', 'map-panel-help', 'Twój bohater nie uczestniczy w potyczce. Mistrz gry może go do niej dodać.')); return; } }
     if (store.loadError) { panel.append(el('p', 'eyebrow', 'BŁĄD ZAPISU'), el('h3', '', 'Nie można wczytać danych'), el('p', 'map-panel-help', 'Przywróć poprawną kopię zapasową, aby ponownie korzystać z mapy.')); return; }
-    if (!currentMap && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Stwórz mapę, by zobaczyć dodanych uczestników')); return; }
+    if (!currentMap && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Wybierz scenerię, by zobaczyć dodanych uczestników')); return; }
     if (!participants.length && !isPlayer()) { panel.append(el('p', 'eyebrow', 'UCZESTNICY'), el('p', 'map-panel-help', 'Dodaj bohatera lub przeciwnika do aktywnej walki.')); return; }
     const names = displayNames(participants), index = participants.findIndex(p => isPlayer() ? p.type === 'hero' && p.heroId === store.access.heroId : p.id === selected);
     const person = participants[index];
@@ -558,7 +558,7 @@
     if (terrainChanged) { gesture = null; touchPoints.clear(); touchGesture = null; touchToken = null; touchLocked = false; }
     currentMap = map;
     blank.hidden = !!map; stage.hidden = !map;
-    if (isPlayer()) blank.querySelector('p').textContent = 'Mistrz gry nie przygotował jeszcze mapy.';
+    if (isPlayer()) blank.querySelector('p').textContent = 'Mistrz gry nie przygotował jeszcze scenerii.';
     generateButton.textContent = 'Wygeneruj mapę'; generateButton.disabled = !!store.loadError || isPlayer() || !canSave();
     section.querySelector('.map-heading-actions').hidden = isPlayer();
     section.querySelector('.map-toolbar').hidden = isPlayer();
