@@ -322,3 +322,18 @@ test('battle weariness is independent per enemy and absent from library', () => 
   assert.throws(() => store.setEnemyWeary(first.id, 'true'), TypeError);
   assert.throws(() => store.setEnemyWeary('unknown', true));
 });
+
+test('enemy notes are instance-local, compare expected content and survive backup', () => {
+  const s = createStore(storage());
+  const library = s.addLibrary({ name: 'Ork', notes: 'Wzorzec' });
+  const a = s.addEnemy(library), b = s.addEnemy(library);
+  s.setEnemyNotes(a.id, 'Szkic', 'Wzorzec');
+  assert.equal(s.getState().battle.find(e => e.id === b.id).notes, 'Wzorzec');
+  assert.equal(s.getState().library[0].notes, 'Wzorzec');
+  assert.throws(() => s.setEnemyNotes(a.id, 'Nadpisanie', 'Wzorzec'), { status: 409 });
+  assert.throws(() => s.setEnemyNotes(a.id, null, 'Szkic'), TypeError);
+  const restored = createStore(storage()); restored.restoreBackup(s.exportBackup());
+  assert.equal(restored.getState().battle.find(e => e.id === a.id).notes, 'Szkic');
+  s.removeParticipant(a.id);
+  assert.throws(() => s.setEnemyNotes(a.id, 'Usunięty', 'Szkic'), { status: 404 });
+});

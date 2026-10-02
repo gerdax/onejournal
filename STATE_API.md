@@ -90,7 +90,7 @@ is malformed, `loadError` explains the startup problem and normal mutations are
 blocked; call `restoreBackup(validBackup)` to explicitly recover it.
 
 Battle and library methods are `addEnemy`, `removeParticipant`, `clearBattle`,
-`clearEncounter`, `toggleDefeated`, `setEnemyWound`, `setEnemyWeary`, `adjustResource`, `reorderEnemies`, `addLibrary`,
+`clearEncounter`, `toggleDefeated`, `setEnemyWound`, `setEnemyWeary`, `setEnemyNotes`, `adjustResource`, `reorderEnemies`, `addLibrary`,
 `removeLibrary`, and `importLibrary`. Enemy battle entries retain the legacy
 fields (`endurance`, `maxEndurance`, `hate`, `maxHate`, `defeated`, and combat
 metadata). `importLibrary(data)` accepts an array or `{library}` and returns the
@@ -189,7 +189,9 @@ are visual terrain only; they impose no movement rules. Legacy maps without
 features remain unchanged; backups still use version 2. New generation affects
 only explicitly regenerated maps, never existing terrain or token positions.
 
-Enemy records include plain-text `notes` (empty by default for legacy entries). Notes are copied with library templates into encounters and clones, preserved in backups, and included when detecting duplicate library imports. Map notes are read-only snapshots of the added enemy, like its other template fields.
+Enemy records include plain-text `notes` (empty by default for legacy entries). Notes are copied with library templates into encounters and clones, preserved in backups, and included when detecting duplicate library imports. GM map notes edit only that encounter instance through `setEnemyNotes(id, notes, expectedNotes)`. All arguments are strings; a missing enemy returns 404 and a different current `notes` value returns 409. The comparison and write participate in the document CAS, so simultaneous editors cannot silently overwrite one another. Players cannot call this command or read these notes; changes increment only the private revision. No schema or backup format changes are required.
+
+The editor autosaves after 500 ms and keeps per-enemy drafts and in-flight writes when switching tokens or receiving snapshots. Errors preserve the draft. A conflict requires an explicit choice to save the draft instead of the current server text (using its latest value as the new expectation) or accept the server text. These in-memory drafts do not survive reloading the page.
 
 Cloud store: `clearRolls()` atomically deletes all published public and private rolls.
 Only GM may call it (server-enforced); the returned snapshot updates the caller,

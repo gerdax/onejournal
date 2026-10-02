@@ -274,7 +274,13 @@
     const state = store.getState(), ids = new Set(state.heroes.map(hero => hero.id));
     listCards.forEach((card, id) => { if (!ids.has(id)) { card.remove(); listCards.delete(id); } });
     list.hidden = isPlayer();
-    if (isPlayer()) document.querySelector('[data-tab="heroes"]').textContent = state.heroes.find(hero => hero.id === store.access.heroId)?.name || "Bez imienia";
+    if (isPlayer()) {
+      const heroTab = document.querySelector('[data-tab="heroes"]');
+      const name = state.heroes.find(hero => hero.id === store.access.heroId)?.name || "Bez imienia";
+      heroTab.querySelector('.nav-label-long').textContent = name;
+      heroTab.setAttribute('aria-label', name);
+      heroTab.title = name;
+    }
     host.querySelector(".hero-heading h2").textContent = isPlayer() ? "Mój bohater" : "Drużyna";
     form.setAttribute("role", isPlayer() ? "form" : "tabpanel");
     const emptyPanel = host.querySelector("#hero-empty-panel");

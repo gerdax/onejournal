@@ -15,6 +15,8 @@ Po rotacji klucza szyfrowania trzeba ponownie zaszyfrować wszystkie linki lub w
 
 Aktualizacja notatnika wymaga kolejności: migracja `202609300001_notebook.sql`, `node scripts/admin-build.mjs` i wdrożenie Edge Function, następnie publikacja frontendu. Migracja dodaje prywatną treść i wersję notatnika; nie zmienia istniejących arkuszy, mapy ani rzutów.
 
+Aktualizacja edytowalnych notatek przeciwników: uruchom `node scripts/admin-build.mjs`, wdróż funkcję Edge z obsługą `setEnemyNotes`, a dopiero potem frontend. Migracja danych nie jest potrzebna. Starszy frontend działa z nowym backendem.
+
 ## GitHub Pages
 
 Repozytorium: `gerdax/onejournal`. W Settings → Pages ustaw Source: GitHub Actions. Push na `main` uruchamia testy jednostkowe, przygotowanie `dist/` oraz publikację. Do hostingu trafiają wyłącznie jawnie wybrane pliki frontendowe i zasoby vendor — nie funkcje serwerowe, backupy ani konfiguracja administracyjna.

@@ -37,11 +37,14 @@
       if (secret) history.replaceState(null, '', location.pathname + location.search);
       store.subscribe(updateConnection);
       if (store.access.role === 'player') {
-        document.querySelector('[data-tab="heroes"]').textContent = 'Mój bohater';
+        const heroTab = document.querySelector('[data-tab="heroes"]');
+        heroTab.querySelector('.nav-label-long').textContent = 'Mój bohater';
+        heroTab.setAttribute('aria-label', 'Mój bohater');
+        heroTab.title = 'Mój bohater';
         for (const name of ['opponents']) { const tab = document.querySelector(`[data-tab="${name}"]`); tab.hidden = true; tab.disabled = true; }
       }
       document.getElementById('gm-settings').hidden = store.access.role !== 'gm';
-      for (const src of ['vendor/Sortable.min.js', 'avatars.js?v=1', 'heroes.js?v=oj14', 'map.js?v=oj11', 'app.js?v=oj1', 'dice-rules.js?v=oj1', 'journal.js?v=12', 'notebook.js?v=4', 'dice-engine.js?v=oj1', 'dice-roller.js?v=oj9', 'settings.js?v=4']) await load(src);
+      for (const src of ['vendor/Sortable.min.js', 'avatars.js?v=1', 'heroes.js?v=oj15', 'enemy-notes.js?v=1', 'map.js?v=oj12', 'app.js?v=oj1', 'dice-rules.js?v=oj1', 'journal.js?v=12', 'notebook.js?v=4', 'dice-engine.js?v=oj1', 'dice-roller.js?v=oj9', 'settings.js?v=4']) await load(src);
       started = true; screen.hidden = true; main.hidden = false;
       document.getElementById('journal-open').hidden = false;
       document.getElementById('notebook-open').hidden = store.access.role !== 'gm';
@@ -69,7 +72,7 @@
   function fit() {
     frame = null;
     if (!nav.getClientRects().length) return;
-    nav.classList.remove('nav-hide-count', 'nav-short-label');
+    nav.classList.remove('nav-hide-count', 'nav-icon-label');
     const fits = () => {
       const items = [...nav.children].filter(node => node.getClientRects().length);
       const gap = parseFloat(getComputedStyle(nav).columnGap) || 0;
@@ -77,7 +80,7 @@
         + gap * Math.max(0, items.length - 1) <= nav.clientWidth + 0.5;
     };
     if (!fits()) nav.classList.add('nav-hide-count');
-    if (!fits()) nav.classList.add('nav-short-label');
+    if (!fits()) nav.classList.add('nav-icon-label');
   }
   function schedule() { if (frame == null) frame = requestAnimationFrame(fit); }
   new ResizeObserver(schedule).observe(nav);

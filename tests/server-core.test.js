@@ -474,3 +474,24 @@ test('both generic GM modes are named MG and resource modifiers do not change sh
   }
   assert.deepEqual(f.doc.state, before);
 });
+
+test('enemy notes are private GM edits with atomic content conflicts', async () => {
+  const f = fixture();
+  const command = (method, args) => f.core.handle('gm', { action: 'command', method, args });
+  const hero = await command('saveHero', [{ name: 'A' }]);
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId: hero.result.id });
+  await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const enemy = await command('addEnemy', [{ name: 'Ork', notes: 'Stare' }]);
+  const id = enemy.result.id, revision = f.doc.publicRevision;
+  const results = await Promise.allSettled([command('setEnemyNotes', [id, 'Nowe A', 'Stare']), command('setEnemyNotes', [id, 'Nowe B', 'Stare'])]);
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(results.find(r => r.status === 'rejected').reason.status, 409);
+  assert.equal(f.doc.publicRevision, revision);
+  await assert.rejects(f.core.handle('p1', { action: 'command', method: 'setEnemyNotes', args: [id, 'Atak', 'Nowe A'] }), { status: 403 });
+  const player = await f.core.handle('p1', { action: 'snapshot' });
+  assert.equal(JSON.stringify(player).includes('Nowe A'), false);
+  assert.equal(JSON.stringify(player).includes('Nowe B'), false);
+  await assert.rejects(command('setEnemyNotes', [id, 12, 'Stare']), { status: 400 });
+  await command('removeParticipant', [id]);
+  await assert.rejects(command('setEnemyNotes', [id, 'Szkic', 'Nowe A']), { status: 404 });
+});
