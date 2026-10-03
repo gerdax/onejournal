@@ -14,6 +14,7 @@ const { startFixture } = require('./fixture-server.cjs');
       const page = await browser.newPage();
       await page.goto(fixture.url + '/#access=' + (role === 'gm' ? fixture.secrets.gm : fixture.secrets.players[0]));
       await page.waitForFunction(() => OneRingStore?.connection === 'online');
+      if (role === 'gm') await page.locator('[data-tab="map"]').click();
       const heroId = fixture.heroes[0].id;
       await page.evaluate(async ({ role, heroId }) => {
         if (role === 'gm') await OneRingStore.selectToken('hero:' + heroId);

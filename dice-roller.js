@@ -199,7 +199,7 @@
     pressStartedInSheet = false;
     setup.querySelector('.dice-error').hidden = true;
     setup.querySelector('.dice-error').textContent = '';
-    const selected = root.OneRingStore.access.role === 'gm' ? root.OneRingMap?.getSelectedParticipant?.() : null;
+    const selected = root.OneRingStore.access.role === 'gm' && document.getElementById('map')?.classList.contains('active') ? root.OneRingMap?.getSelectedParticipant?.() : null;
     boundParticipant = selected?.type === 'enemy' || selected?.type === 'hero'
       ? { id: selected.id, heroId: selected.heroId || null, type: selected.type, name: selected.name || (selected.type === 'hero' ? 'Bez imienia' : 'Przeciwnik') }
       : null;
