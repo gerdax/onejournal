@@ -5,7 +5,7 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..'), output = path.join(__dirname, 'artifacts');
 fs.mkdirSync(output, { recursive: true });
 const results = [];
-for (const file of ['online.cjs', 'dice-online.cjs', 'map-desktop-online.cjs', 'map-touch-online.cjs', 'map-deselect-online.cjs', 'dice-tabs-online.cjs', 'dice-memory-online.cjs', 'map-disclosures-online.cjs', 'enemy-notes-online.cjs', 'map-library-online.cjs']) {
+for (const file of ['online.cjs', 'dice-online.cjs', 'map-desktop-online.cjs', 'map-touch-online.cjs', 'map-deselect-online.cjs', 'dice-tabs-online.cjs', 'dice-memory-online.cjs', 'map-disclosures-online.cjs', 'enemy-notes-online.cjs', 'map-library-online.cjs', 'map-library-failures-online.cjs', 'notebook-online.cjs', 'avatar-online.cjs']) {
   const start = performance.now();
   const result = spawnSync(process.execPath, ['-r', './performance/local-only.cjs', 'tests/' + file], { cwd: root, encoding: 'utf8', timeout: 180000 });
   fs.writeFileSync(path.join(output, file + '.log'), (result.stdout || '') + (result.stderr || '') + (result.error ? '\n' + result.error.stack : ''));

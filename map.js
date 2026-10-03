@@ -576,11 +576,14 @@
   function transform() { stage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`; }
   function fit() { if (!currentMap || !viewport.clientWidth || !viewport.clientHeight) return; zoom = clamp(Math.min((viewport.clientWidth - 24) / currentMap.width, (viewport.clientHeight - 24) / currentMap.height), .1, 2.5); offsetX = (viewport.clientWidth - currentMap.width * zoom) / 2; offsetY = (viewport.clientHeight - currentMap.height * zoom) / 2; transform(); }
   function zoomAt(factor, x = viewport.clientWidth / 2, y = viewport.clientHeight / 2) { if (!currentMap) return; const next = clamp(zoom * factor, .1, 3); offsetX = x - (x - offsetX) * next / zoom; offsetY = y - (y - offsetY) * next / zoom; zoom = next; transform(); }
-  function refresh(snapshot) {
+  let authoritativeTerrainKey = '', renderedTokensKey = '', renderedPanelKey = '';
+  let renderedAccessKey = '', renderedParticipantIds = new Set();
+  function refresh(snapshot, force = false) {
     const map = snapshot.map, participants = store.getParticipants();
     selected = pendingSelection !== undefined ? pendingSelection : viewSelection();
     const key = map ? JSON.stringify(map.kind === 'image' ? [map.kind, map.imageId, map.width, map.height] : [map.seed, map.scene, map.size, map.width, map.height, map.terrain, map.features]) : '';
-    const terrainChanged = key !== fittedKey;
+    const terrainChanged = key !== authoritativeTerrainKey;
+    authoritativeTerrainKey = key;
     if (terrainChanged || !canSave()) {
       pendingMoves.clear(); moveEpoch++;
       gesture = null; touchPoints.clear(); touchGesture = null; touchToken = null; touchLocked = false;
@@ -590,6 +593,25 @@
     if (gesture?.type === 'token' && !participantIds.has(gesture.id)) gesture = null;
     if (touchToken && !participantIds.has(touchToken.id)) touchToken = null;
     currentMap = map;
+    if (!section.classList.contains('active') && !force) {
+      // Removed maps or revoked access must not leave a private sheet in the DOM.
+      const accessKey = JSON.stringify(store.access);
+      const exposedDOM = tokens.children.length || terrainSvg.children.length || panel.children.length ||
+        !heroSheetHost.hidden || enemyNotesBody.querySelector('textarea').value;
+      if (exposedDOM && (!map || !store.access?.role || accessKey !== renderedAccessKey ||
+          [...renderedParticipantIds].some(id => !participantIds.has(id)) ||
+          (selected && !participantIds.has(selected)))) {
+        tokens.replaceChildren(); terrainSvg.replaceChildren(); panel.replaceChildren();
+        heroSheet.show(null); notesEditor.show(null); enemyDetailBody.replaceChildren();
+        enemyNotesBody.querySelector('textarea').value = '';
+        enemySheet.hidden = true;
+        fittedKey = ''; renderedTokensKey = ''; renderedPanelKey = '';
+        renderedAccessKey = accessKey; renderedParticipantIds = participantIds;
+      }
+      return;
+    }
+    const tokensKey = JSON.stringify([map?.positions, participants, selected, store.access, moveEpoch, canSave()]);
+    const panelKey = JSON.stringify([key, participants, selected, store.access, store.loadError, canSave()]);
     blank.hidden = !!map; stage.hidden = !map;
     if (isPlayer()) blank.querySelector('p').textContent = 'Mistrz gry nie przygotował jeszcze scenerii.';
     doc.getElementById('map-library-open').disabled = !!store.loadError || isPlayer();
@@ -597,11 +619,13 @@
     if (store.loadError) { errorBox.textContent = 'Nie można zapisać mapy: zapisane dane są uszkodzone. Przywróć poprawną kopię zapasową.'; errorBox.hidden = false; }
     if (map) {
       stage.style.width = map.width + 'px'; stage.style.height = map.height + 'px';
-      if (terrainChanged) { paintTerrain(map); fittedKey = key; root.requestAnimationFrame(fit); }
+      if (key !== fittedKey) { paintTerrain(map); fittedKey = key; root.requestAnimationFrame(fit); }
       root.OneRingMapLibrary?.showActiveImage(map, terrainSvg, store);
-      renderTokens(map, participants);
-    } else { fittedKey = ''; tokens.replaceChildren(); root.OneRingMapLibrary?.showActiveImage(null, terrainSvg, store); }
-    renderPanel(participants);
+      if (force || tokensKey !== renderedTokensKey) renderTokens(map, participants);
+    } else if (fittedKey || tokens.children.length) { fittedKey = ''; tokens.replaceChildren(); terrainSvg.replaceChildren(); root.OneRingMapLibrary?.showActiveImage(null, terrainSvg, store); }
+    if (force || panelKey !== renderedPanelKey) renderPanel(participants);
+    renderedTokensKey = tokensKey; renderedPanelKey = panelKey;
+    renderedAccessKey = JSON.stringify(store.access); renderedParticipantIds = participantIds;
   }
   doc.getElementById('map-add-heroes').addEventListener('click', () => run(async () => {
     const snapshot = store.getState();
@@ -840,7 +864,10 @@
   tokens.addEventListener('keydown', event => { const marker = event.target.closest('.map-token'); if (!marker || !currentMap || isPlayer()) return; const id = marker.dataset.id; if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectParticipant(selected === id ? null : id); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); return; } const vectors = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = vectors[event.key]; if (!d) return; event.preventDefault(); selectParticipant(id); const pos = displayedTokenPosition(id), step = event.shiftKey ? 20 : 5; queueTokenMove(id, pos.x + d[0] * step, pos.y + d[1] * step); const next = Array.from(tokens.children).find(n => n.dataset.id === id); if (next) next.focus(); });
   if (root.ResizeObserver) new root.ResizeObserver(() => { if (currentMap && section.classList.contains('active') && viewport.clientWidth && viewport.clientHeight && !gesture && !touchPoints.size) fit(); }).observe(viewport);
   doc.addEventListener('one-ring:tab', event => { if (event.detail === 'map' || event.detail && event.detail.tab === 'map') root.requestAnimationFrame(() => { if (currentMap && viewport.clientWidth) fit(); }); });
-  store.subscribe(refresh); refresh(store.getState());
+  store.subscribe(refresh); refresh(store.getState(), true);
+  doc.addEventListener('one-ring:tab', event => {
+    if (event.detail === 'map' || event.detail && event.detail.tab === 'map') refresh(store.getState());
+  });
   function selectParticipant(id) {
     if (isPlayer() || !canSave()) return;
     const participants = store.getParticipants();
@@ -849,8 +876,11 @@
     const sequence = ++selectionSequence;
     pendingSelection = id;
     selected = id;
-    if (currentMap) { if (touchToken) paintSelectedMarkers(); else renderTokens(currentMap, participants); }
-    renderPanel(participants);
+    if (section.classList.contains('active')) {
+      if (currentMap) { if (touchToken) paintSelectedMarkers(); else renderTokens(currentMap, participants); }
+      renderPanel(participants);
+      renderedTokensKey = ''; renderedPanelKey = '';
+    }
     selectionWrite = selectionWrite.then(async () => {
       if (sequence !== selectionSequence) return;
       await run(() => store.selectToken(id));
@@ -858,8 +888,11 @@
       pendingSelection = undefined;
       selected = viewSelection();
       const latestParticipants = store.getParticipants();
-      if (currentMap) { if (touchToken) paintSelectedMarkers(); else renderTokens(currentMap, latestParticipants); }
-      renderPanel(latestParticipants);
+      if (section.classList.contains('active')) {
+        if (currentMap) { if (touchToken) paintSelectedMarkers(); else renderTokens(currentMap, latestParticipants); }
+        renderPanel(latestParticipants);
+        renderedTokensKey = ''; renderedPanelKey = '';
+      }
     });
   }
   root.OneRingMap = { generateTerrain, fit, selectParticipant,

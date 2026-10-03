@@ -42,3 +42,7 @@ Odtwórz migracje w nowej bazie, ustaw oddzielne sekrety i nowy link MG, wgraj e
 Przed publikacją frontendu biblioteki map zastosuj migrację `202610020001_map_library.sql`, uruchom `node scripts/admin-build.mjs` i wdróż Edge Function. Nowy backend nadal obsługuje stare mapy generatora. Bucket `onejournal-maps` jest prywatny; tylko funkcja Edge odczytuje obrazy po sprawdzeniu dostępu. Gracze mogą pobrać wyłącznie obraz aktualnej potyczki.
 
 Usunięcie mapy z biblioteki nie usuwa aktywnego tła ani fizycznych obiektów Storage. Obrazy pozostają niezmienne; automatyczne czyszczenie nie jest częścią tej aktualizacji. Kopie gry obejmują bibliotekę oraz obraz aktywnej mapy, również po usunięciu wpisu z biblioteki. Sprawdź import wyłącznie na izolowanych danych.
+
+## Warunkowe odświeżanie snapshotów
+
+Optymalizacja odświeżania wymaga opublikowania nowego `server-core.js`: uruchom `node scripts/admin-build.mjs`, wdróż funkcję `onejournal`, a następnie frontend. Nie wymaga migracji bazy. Kontrola dostępu wykonywana jest przy każdym odczycie, także gdy stan się nie zmienił. Stary klient nadal otrzymuje pełne snapshoty; nowy klient działa ze starym backendem, ale bez oszczędności transferu. Kolejka zapisów, Realtime i polling co 5 sekund pozostają bez zmian. Krótka odpowiedź zmniejsza transfer Edge → przeglądarka i koszt projekcji/rysowania; funkcja nadal odczytuje dokument bazy.

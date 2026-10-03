@@ -29,6 +29,18 @@ Additional methods: `connect(secret?)`, `refresh()`, `markOffline()`, `stop()`,
 `selectToken(id)`, `listLinks()`, `rotateLink(heroId)`, `revokeLink(heroId)`,
 `publishRoll({id,heroId,enemyId?,boundHeroId?,config,raw})`. Offline mutations reject without sending.
 
+An online `refresh()` may send `snapshot` with `knownRevision` and
+`knownAccess: {role,heroId}` from its current session. The server checks the
+current grant first. It returns `{unchanged:true,revision,access}` only when
+the numeric revision and both access fields match exactly; otherwise it returns
+the full filtered snapshot. `connect()` and recovery from offline always request
+a full snapshot. The client accepts an unchanged reply only for the view that
+started that request, and retries a malformed or unmatched reply once without
+the condition. Full snapshots are compared by projected content, excluding
+one-off command `result` values, before notifying subscribers. Connection
+changes still notify subscribers. Older clients and servers continue using full
+snapshots.
+
 Player snapshots have empty library/battle arrays and only the assigned hero.
 `getParticipants()` is independent of those arrays: public token fields for
 others, full details for the player's own participating hero. No private enemy

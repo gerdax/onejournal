@@ -9,25 +9,39 @@
   const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'setEnemyWeary', 'setEnemyNotes', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'removeMap', 'loadMap', 'restoreBackup', 'selectToken'];
   function createStore(transport) {
     let snapshot = null, connection = 'connecting', listeners = new Set(), tail = Promise.resolve(), refreshing, stopped = false, epoch = 0;
+    let requestOrder = 0, appliedOrder = 0, refreshGeneration = 0;
     const empty = { version: 2, library: [], battle: [], heroes: [], heroParticipants: [], mapLibrary: [], map: null };
     function emit() { for (const fn of listeners) { try { fn(store.getState()); } catch (error) { console.error('State observer failed', error); } } }
-    function accept(data) {
+    const sameAccess = (a, b) => a?.role === b?.role && a?.heroId === b?.heroId;
+    const projection = data => { const copy = clone(data); delete copy.result; return copy; };
+    function accept(data, order) {
       if (!data || !data.state || !data.access) throw new Error('Nieprawidłowa odpowiedź serwera.');
-      if (!snapshot || Number(data.revision) >= Number(snapshot.revision)) snapshot = clone(data);
-      connection = 'online'; emit();
+      const next = projection(data);
+      const sameScope = snapshot && sameAccess(next.access, snapshot.access);
+      const stale = snapshot && (sameScope && Number(next.revision) < Number(snapshot.revision) ||
+        order < appliedOrder && (!sameScope || Number(next.revision) === Number(snapshot.revision)));
+      const changed = !stale && (!snapshot || JSON.stringify(next) !== JSON.stringify(snapshot));
+      if (changed) snapshot = next;
+      if (!stale) appliedOrder = Math.max(appliedOrder, order);
+      const transitioned = connection !== 'online';
+      connection = 'online';
+      if (changed || transitioned) emit();
     }
     function failed(error) {
+      const previous = connection, hadSnapshot = !!snapshot;
       if (error.status === 401 || error.status === 403) { epoch++; snapshot = null; connection = 'revoked'; transport.stop?.(); }
-      else if (!error.status || error.status >= 500) connection = 'offline';
-      emit();
+      else if (!error.status || error.status >= 500) {
+        connection = 'offline'; refreshGeneration++; refreshing = null;
+      }
+      if (connection !== previous || hadSnapshot && !snapshot) emit();
     }
-    async function request(body) {
+    async function request(body, isCurrent) {
       const startedEpoch = epoch;
       try {
         const response = await transport.request(body);
         if (epoch !== startedEpoch || stopped) { const error = new Error('Sesja zmieniła się podczas żądania.'); error.stale = true; throw error; }
         return response;
-      } catch (error) { if (!error.stale && epoch === startedEpoch) failed(error); throw error; }
+      } catch (error) { if (!error.stale && epoch === startedEpoch && ([401, 403].includes(error.status) || !isCurrent || isCurrent())) failed(error); throw error; }
     }
     function assertWritable() { if (!store.canWrite) throw new Error('Brak połączenia. Zaczekaj na synchronizację.'); }
     function staleSession() { const error = new Error('Sesja zmieniła się podczas żądania.'); error.stale = true; return error; }
@@ -38,8 +52,9 @@
         if (epoch !== queuedEpoch || stopped) throw staleSession();
         assertWritable();
         try {
+          const order = ++requestOrder;
           const response = await request(body);
-          if (apply) accept(response);
+          if (apply) accept(response, order);
           return response;
         } catch (error) {
           if (error.status === 409) await store.refresh().catch(() => {});
@@ -64,20 +79,49 @@
       getParticipants() { return clone(snapshot?.participants || []); },
       subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
       async connect(secret) {
-        epoch++; stopped = false; connection = 'connecting'; emit();
+        epoch++; refreshGeneration++; stopped = false; refreshing = null; connection = 'connecting'; emit();
+        const order = ++requestOrder;
         const response = await request(secret ? { action: 'exchange', secret } : { action: 'snapshot' });
         // Opening a new link may deliberately switch role and reset revisions.
-        snapshot = null; accept(response);
+        snapshot = null; accept(response, order);
         transport.start?.(() => store.refresh().catch(() => {}));
         return store;
       },
       refresh() {
         if (stopped || connection === 'revoked') return Promise.reject(new Error('Dostęp został cofnięty.'));
-        if (!refreshing) refreshing = request({ action: 'snapshot' }).then(accept).finally(() => { refreshing = null; });
+        if (!refreshing) {
+          const generation = refreshGeneration;
+          const baseline = connection === 'online' ? snapshot : null;
+          const conditional = baseline && Number.isSafeInteger(baseline.revision) && baseline.revision >= 0;
+          const body = conditional ? { action: 'snapshot', knownRevision: baseline.revision, knownAccess: clone(baseline.access) } : { action: 'snapshot' };
+          const order = ++requestOrder;
+          const pending = (async () => {
+            const response = await request(body, () => generation === refreshGeneration);
+            if (generation !== refreshGeneration) throw staleSession();
+            if (response?.unchanged === true) {
+              // A newer response may have changed the projection while this read was in flight.
+              if (snapshot !== baseline) return;
+              if (conditional && response.revision === body.knownRevision && sameAccess(response.access, body.knownAccess)) {
+                if (connection !== 'online') { connection = 'online'; emit(); }
+                return;
+              }
+              const fullOrder = ++requestOrder;
+              const full = await request({ action: 'snapshot' }, () => generation === refreshGeneration);
+              if (generation !== refreshGeneration) throw staleSession();
+              if (full?.unchanged === true) throw new Error('Nieprawidłowa odpowiedź serwera.');
+              accept(full, fullOrder);
+              return;
+            }
+            accept(response, order);
+          })();
+          let settled;
+          settled = pending.finally(() => { if (refreshing === settled) refreshing = null; });
+          refreshing = settled;
+        }
         return refreshing;
       },
-      markOffline() { if (connection !== 'revoked') { epoch++; connection = 'offline'; emit(); } },
-      stop() { epoch++; stopped = true; transport.stop?.(); connection = 'offline'; emit(); },
+      markOffline() { if (connection !== 'revoked') { epoch++; refreshGeneration++; refreshing = null; const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); } },
+      stop() { epoch++; refreshGeneration++; refreshing = null; stopped = true; transport.stop?.(); const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); },
       exportBackup() { return enqueue({ action: 'export' }); },
       getAvatar(heroId) { return enqueue({ action: 'avatarGet', heroId }); },
       uploadMap({ id, name, dataUrl, thumbnailDataUrl }) {

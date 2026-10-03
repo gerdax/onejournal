@@ -156,7 +156,19 @@
       const sheets = new Map();
       let disclosureOpen = [false, false, false, false, false];
       const disclosures = editor => editor.querySelectorAll('details.sheet-disclosure');
-      store.subscribe(() => { for (const sheet of sheets.values()) sheet.sync(); });
+      const sheetStateKey = () => JSON.stringify([store.getState().heroes, store.heroVersions, store.connection, store.canWrite]);
+      let sheetsKey = sheetStateKey();
+      store.subscribe(() => {
+        const nextKey = sheetStateKey();
+        if (nextKey === sheetsKey) return;
+        sheetsKey = nextKey;
+        for (const [id, sheet] of sheets) {
+          if (!heroById(id)) {
+            if (container.contains(sheet.editor)) { container.replaceChildren(); container.hidden = true; }
+            sheets.delete(id);
+          } else sheet.sync();
+        }
+      });
       return {
         show(id) {
           const visibleEditor = container.firstElementChild;
@@ -315,6 +327,38 @@
     });
   }
   function render() { const layout = host.querySelector(".heroes-layout"), priorError = host.querySelector(".hero-error"); if (store.loadError) { layout.hidden = true; if (!priorError) host.querySelector(".hero-heading").append(el("p", "hero-error", "Nie można odczytać zapisanych danych bohaterów. Przywróć poprawną pełną kopię.")); return; } layout.hidden = false; if (priorError) priorError.remove(); syncEditor(); renderList(); syncHeader(); renderBattle(); if (draftDirty && canSave() && !savingField && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(200); }
+  let heroesKey = null;
+  function refresh(snapshot = store.getState(), force = false) {
+    const nextKey = JSON.stringify([snapshot.heroes, snapshot.heroParticipants, store.getParticipants().filter(p => p.type === "hero"), store.access]);
+    const changed = nextKey !== heroesKey;
+    heroesKey = nextKey;
+    // An editor's draft and save timer must keep working even while its page is hidden.
+    if (editingId && !snapshot.heroes.some(hero => hero.id === editingId)) {
+      editingId = null; draftDirty = false; draftVersion = null; dirtyFields.clear(); conflictFields.clear();
+      form.replaceChildren(); form.hidden = true;
+    }
+    if (changed && [...listCards.keys()].some(id => !snapshot.heroes.some(hero => hero.id === id))) {
+      list.replaceChildren(); listCards.clear();
+    }
+    if (changed && !snapshot.heroes.length) battleList.replaceChildren();
+    if (changed && isPlayer()) {
+      const name = snapshot.heroes.find(hero => hero.id === store.access.heroId)?.name || "Bez imienia";
+      const heroTab = document.querySelector('[data-tab="heroes"]');
+      heroTab.querySelector('.nav-label-long').textContent = name;
+      heroTab.setAttribute('aria-label', name); heroTab.title = name;
+    }
+    if (!host.classList.contains("active") && !force) {
+      if (editingId) syncEditor();
+      if (changed && document.getElementById("battle").classList.contains("active")) renderBattle();
+      if (draftDirty && canSave() && !savingField && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(200);
+      return;
+    }
+    if (changed || force) render();
+    else {
+      if (editingId) syncEditor();
+      if (draftDirty && canSave() && !savingField && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(200);
+    }
+  }
   host.addEventListener("click", async event => { const button = event.target.closest("[data-hero-action]"); if (!button) return; const { heroAction: action, id } = button.dataset; if (action === "new") return createHero(); if (action === "edit") { if (isPlayer() && id !== store.access?.heroId) return; if (!mayDiscard()) return; edit(id); return; } if (isPlayer() || !canSave()) { status("Brak uprawnień lub połączenia."); return; } try { if (action === "battle") { const inBattle = store.getState().heroParticipants.some(p => p.heroId === id); if (inBattle) { if (confirm("Usunąć bohatera z potyczki? Arkusz bohatera zostanie zachowany.")) await store.removeParticipant("hero:" + id); } else await store.addHero(id); } else if (action === "delete" && confirm("Usunąć bohatera oraz jego udział w walce?")) { const heroes = store.getState().heroes, index = heroes.findIndex(hero => hero.id === id), next = heroes[index + 1] || heroes[index - 1]; await store.deleteHero(id); if (editingId === id) { editingId = next ? next.id : null; draftDirty = false; dirtyFields.clear(); if (editingId) edit(editingId); } } } catch (error) { status(saveError(error)); } });
   list.addEventListener("keydown", event => { const tabs = [...listCards.values()]; if (!tabs.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const current = tabs.indexOf(event.target.closest('[role="tab"]')); let index = current; if (event.key === "Home") index = 0; else if (event.key === "End") index = tabs.length - 1; else index = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; const target = tabs[index]; if (target && mayDiscard()) { edit(target.dataset.id); target.focus(); } });
   battleList.addEventListener("click", async event => { const button = event.target.closest("button"); if (!button) return; const id = button.dataset.id; if (button.dataset.heroAction === "edit") { if (!mayDiscard()) return; document.querySelector('[data-tab="heroes"]').click(); edit(id.replace(/^hero:/, "")); return; } if (isPlayer() || !canSave()) return; try { if (button.dataset.heroResource) await store.adjustResource(id, button.dataset.heroResource, Number(button.dataset.change)); else if (button.dataset.heroAction === "remove") await store.removeParticipant(id); else if (button.dataset.heroAction === "defeated") await store.toggleDefeated(id); } catch (error) { status(saveError(error)); } });
@@ -364,5 +408,7 @@
     const tab = event.target.closest("[data-tab]");
     if (tab && tab.dataset.tab === "heroes") { syncEditor(); syncHeader(); }
   }, true);
-  store.subscribe(render); render();
+  document.addEventListener("one-ring:tab", event => { if (event.detail === "heroes") refresh(store.getState(), true); });
+  document.addEventListener("one-ring:tab", event => { if (event.detail === "battle") renderBattle(); });
+  store.subscribe(refresh); refresh(store.getState(), true);
 })();

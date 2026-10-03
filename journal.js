@@ -128,10 +128,22 @@
     }
 
   }
+  let rollsKey = JSON.stringify(store.rolls);
+  function refresh() {
+    for (const entry of store.rolls) {
+      if (!seen.has(entry.id)) { seen.add(entry.id); toast(summary(entry)); }
+    }
+    const nextKey = JSON.stringify(store.rolls);
+    const changed = nextKey !== rollsKey;
+    rollsKey = nextKey;
+    if (!store.access.role) { render(); return; }
+    if (dialog.open && changed) render();
+    else if (dialog.open && clear) clear.disabled = clearing || !store.canWrite || !store.rolls.length;
+  }
   async function publish(id) {
     const entry = pending.find(item => item.id === id);
     if (!entry || publishing.has(id)) return;
-    publishing.add(id); render();
+    publishing.add(id); if (dialog.open) render();
     try {
       await store.publishRoll(entry);
       pending = pending.filter(item => item.id !== id); persist();
@@ -139,7 +151,7 @@
     } catch (error) {
       toast('Nie opublikowano rzutu. ' + error.message);
       throw error;
-    } finally { publishing.delete(id); render(); }
+    } finally { publishing.delete(id); if (dialog.open) render(); }
   }
   function prepare(config, heroId, enemyId, boundHeroId) {
     if (!store.canWrite) throw new Error('Brak połączenia — rzut jest zablokowany.');
@@ -160,14 +172,9 @@
   function capture(prepared, raw) {
     const entry = { ...prepared, raw: JSON.parse(JSON.stringify(raw)) };
     DiceRules.interpretRoll(entry.config, entry.raw);
-    pending.push(entry); persist(); render(); return entry.id;
+    pending.push(entry); persist(); if (dialog.open) render(); return entry.id;
   }
-  store.subscribe(() => {
-    for (const entry of store.rolls) {
-      if (!seen.has(entry.id)) { seen.add(entry.id); toast(summary(entry)); }
-    }
-    render();
-  });
+  store.subscribe(refresh);
   window.OneJournalRolls = { prepare, capture, publish, notify: toast, isPending: id => pending.some(entry => entry.id === id) };
-  render();
+  if (dialog.open) render();
 })();

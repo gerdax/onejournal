@@ -19,6 +19,53 @@ function fixture() {
   return { core, repository, get doc() { return doc; } };
 }
 
+test('conditional snapshots authenticate first and compare exact revision and access', async () => {
+  const f = fixture();
+  const hero = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A', notes: 'private' }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId: hero });
+  const player = await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const condition = { action: 'snapshot', knownRevision: player.revision, knownAccess: player.access };
+  assert.deepEqual(await f.core.handle('p1', condition), { unchanged: true, revision: player.revision, access: player.access });
+  for (const revision of [String(player.revision), -1, 1.5, null, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.ok((await f.core.handle('p1', { ...condition, knownRevision: revision })).state);
+  }
+  assert.ok((await f.core.handle('p1', { ...condition, knownAccess: { role: 'gm', heroId: null } })).state);
+  await f.core.handle('gm', { action: 'rotateLink', heroId: hero });
+  await assert.rejects(f.core.handle('p1', condition), { status: 403 });
+});
+
+test('equal revision after grant scope change returns a newly filtered projection', async () => {
+  const f = fixture();
+  const first = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A', notes: 'private A' }] })).result.id;
+  const second = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'B', notes: 'private B' }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId: first });
+  const initial = await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const secondLink = await f.core.handle('gm', { action: 'rotateLink', heroId: second });
+  await f.core.handle('p1', { action: 'exchange', secret: secondLink.secret });
+  const changed = await f.core.handle('p1', { action: 'snapshot', knownRevision: initial.revision, knownAccess: initial.access });
+  assert.equal(changed.unchanged, undefined);
+  assert.equal(changed.revision, initial.revision);
+  assert.deepEqual(changed.state.heroes.map(hero => hero.id), [second]);
+  assert.equal(JSON.stringify(changed).includes('private A'), false);
+});
+
+test('GM private notebook changes do not expand a player conditional projection', async () => {
+  const f = fixture();
+  const hero = (await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A' }] })).result.id;
+  const link = await f.core.handle('gm', { action: 'rotateLink', heroId: hero });
+  const player = await f.core.handle('p1', { action: 'exchange', secret: link.secret });
+  const gm = await f.core.handle('gm', { action: 'snapshot' });
+  const document = { blocks: [{ type: 'paragraph', runs: [{ text: 'private GM note' }] }] };
+  await f.core.handle('gm', { action: 'notebookSave', document, version: gm.notebook.version });
+  const updatedGM = await f.core.handle('gm', { action: 'snapshot', knownRevision: gm.revision, knownAccess: gm.access });
+  assert.equal(updatedGM.unchanged, undefined);
+  assert.equal(updatedGM.notebook.document.blocks[0].runs[0].text, 'private GM note');
+  assert.deepEqual(await f.core.handle('p1', { action: 'snapshot', knownRevision: player.revision, knownAccess: player.access }),
+    { unchanged: true, revision: player.revision, access: player.access });
+  await f.core.handle('gm', { action: 'revokeLink', heroId: hero });
+  await assert.rejects(f.core.handle('p1', { action: 'snapshot', knownRevision: player.revision, knownAccess: player.access }), { status: 403 });
+});
+
 test('player projections, assignment, rotation and revocation', async () => {
   const f = fixture();
   const a = await f.core.handle('gm', { action: 'command', method: 'saveHero', args: [{ name: 'A' }] });

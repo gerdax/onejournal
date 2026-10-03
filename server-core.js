@@ -204,10 +204,18 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
     if (access.role === "gm") response.catalog = clone(catalog);
     return response;
   };
-  async function read(uid, action) {
+  async function read(uid, action, request) {
     const doc = await repository.get();
     const access = accessFor(doc, uid);
-    if (action === "snapshot") return project(doc, access);
+    if (action === "snapshot") {
+      const revision = access.role === "gm" ? doc.revision : doc.publicRevision;
+      if (Number.isSafeInteger(request.knownRevision) && request.knownRevision >= 0 &&
+          request.knownRevision === revision && isObject(request.knownAccess) &&
+          request.knownAccess.role === access.role && request.knownAccess.heroId === access.heroId) {
+        return { unchanged: true, revision, access };
+      }
+      return project(doc, access);
+    }
     if (action === "export") {
       if (access.role !== "gm") fail(403, "Brak uprawnień.");
       const avatars = {};
@@ -476,7 +484,7 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
   }
   return { defaultDocument, snapshot, handle(uid, request) {
     if (typeof uid !== "string" || !uid || !isObject(request)) fail(400, "Nieprawidłowe żądanie.");
-    if (["snapshot", "export", "links"].includes(request.action)) return read(uid, request.action);
+    if (["snapshot", "export", "links"].includes(request.action)) return read(uid, request.action, request);
     if (["avatarGet", "avatarStage", "mapGet", "mapStage"].includes(request.action)) return (async () => {
       const doc = await repository.get();
       const access = accessFor(doc, uid);
