@@ -65,7 +65,7 @@ const { startFixture } = require('./fixture-server.cjs');
         await page.locator('.dice-close').click();
         await page.evaluate(() => OneRingStore.selectToken(OneRingStore.getParticipants().find(p => p.type === 'enemy').id));
         await page.locator('.dice-launch').click();
-        assert.equal(await page.locator('.dice-bonus-value').textContent(), '+2k', 'enemy opening preserves existing bonus behavior');
+        assert.equal(await page.locator('.dice-bonus-value').textContent(), '0k', 'new enemy starts with its own default bonus');
         await page.locator('.dice-close').click();
         await page.evaluate(() => OneRingStore.selectToken(null));
         await page.locator('.dice-launch').click();

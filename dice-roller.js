@@ -1,8 +1,11 @@
 (function (root) {
   'use strict';
 
-  const config = { actor: 'hero', privateRoll: true, baseDice: 0, featMode: 'normal', exhausted: false,
+  const defaults = { actor: 'hero', privateRoll: true, baseDice: 0, featMode: 'normal', exhausted: false,
     miserable: false, bonus: 0, hope: false, inspired: false, enemyResource: false, target: '' };
+  const config = { ...defaults };
+  const participantSettings = new Map();
+  const participantKey = person => person.type === 'hero' ? `hero:${person.heroId}` : `enemy:${person.id}`;
   let dialog, launch, setup, resultPanel, stage, opener, pending = null, generation = 0, headerOnly = false;
   let pressStartedInSheet = false;
   let boundParticipant = null, genericConfig = null;
@@ -205,6 +208,7 @@
       : null;
     genericConfig = boundParticipant ? { ...config } : null;
     if (boundParticipant) {
+      Object.assign(config, defaults, participantSettings.get(participantKey(boundParticipant)));
       config.actor = boundParticipant.type;
       config.privateRoll = false;
       config.exhausted = !!(boundParticipant.type === 'hero' ? currentBoundHero()?.weary : selected.weary);
@@ -239,6 +243,13 @@
     generation++;
     dialog.close();
     if (boundParticipant) {
+      if (root.OneRingStore.access.role === 'gm' && root.OneRingStore.connection !== 'revoked' &&
+          (boundParticipant.type === 'hero' ? currentBoundHero() : currentEnemy())) {
+        participantSettings.set(participantKey(boundParticipant), {
+          baseDice: config.baseDice, featMode: config.featMode, target: config.target,
+          ...(boundParticipant.type === 'enemy' ? { bonus: config.bonus } : {})
+        });
+      }
       Object.assign(config, genericConfig);
     }
     boundParticipant = genericConfig = null;
@@ -402,7 +413,25 @@
   }
 
   root.DiceRoller = { open, close };
-  root.OneRingStore.subscribe(() => { if (dialog?.open) renderSetup(); });
+  root.OneRingStore.subscribe(() => {
+    const store = root.OneRingStore;
+    if (store.connection === 'revoked' || store.access.role !== 'gm') {
+      participantSettings.clear();
+      if (store.connection === 'revoked') {
+        close();
+        Object.assign(config, defaults);
+        genericConfig = null;
+        return;
+      }
+    } else {
+      const existing = new Set([
+        ...store.getState().heroes.map(hero => `hero:${hero.id}`),
+        ...store.getParticipants().filter(person => person.type === 'enemy').map(participantKey)
+      ]);
+      for (const key of participantSettings.keys()) if (!existing.has(key)) participantSettings.delete(key);
+    }
+    if (dialog?.open) renderSetup();
+  });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
   else mount();
 })(globalThis);
