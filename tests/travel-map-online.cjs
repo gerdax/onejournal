@@ -47,9 +47,11 @@ const { startFixture } = require('./fixture-server.cjs');
     // Modal blocking: normal clicks cannot reach the launcher; synthetic activation is guarded too.
     for (const selector of ['#journal-open', '.dice-launch', '#settings-open']) {
       await page.locator(selector).click();
+      if (selector === '.dice-launch') assert.equal(await launch.isVisible(), false, 'dice modal hides atlas launcher');
       await page.evaluate(() => document.querySelector('.travel-map-launch').click());
       assert.equal(await dialog.evaluate(el => el.open), false, selector);
       await page.keyboard.press('Escape');
+      assert.equal(await launch.isVisible(), true, 'launcher returns after modal closes');
     }
     await page.locator('[data-tab="map"]').click(); await page.locator('#map-fullscreen').click();
     assert.equal(await launch.isVisible(), false);
@@ -79,6 +81,18 @@ const { startFixture } = require('./fixture-server.cjs');
     assert.equal(await page.evaluate(() => document.body.style.overflow), '');
     const player = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
     await player.goto(fixture.url + '/#access=' + fixture.secrets.players[0]);
+    await player.locator('.travel-map-launch').waitFor({ state: 'visible' });
+    await player.evaluate(() => {
+      const input = document.createElement('input'); input.id = 'tap-underlay';
+      input.style.cssText = 'position:fixed;left:100px;top:350px;width:200px;height:100px;z-index:1000';
+      document.body.append(input);
+      window.underlayEvents = []; window.modalAtPointerUp = [];
+      for (const type of ['click', 'focus']) input.addEventListener(type, () => window.underlayEvents.push(type));
+      document.addEventListener('pointerup', event => {
+        if (event.pointerType === 'touch' && event.target.closest('.travel-map-dialog'))
+          window.modalAtPointerUp.push(document.querySelector('.travel-map-dialog').open);
+      });
+    });
     await player.locator('.travel-map-launch').tap(); await player.locator('.travel-map-image').waitFor({ state: 'visible' });
     assert.equal(await player.locator('.travel-map-image').getAttribute('alt'), 'Mapa Eriadoru');
     const touch = await player.context().newCDPSession(player);
@@ -87,6 +101,12 @@ const { startFixture } = require('./fixture-server.cjs');
     await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     assert.equal(await player.locator('.travel-map-dialog').evaluate(el => el.open), true);
     await player.touchscreen.tap(195, 400); assert.equal(await player.locator('.travel-map-dialog').evaluate(el => el.open), false);
+    assert((await player.evaluate(() => window.modalAtPointerUp)).every(Boolean), 'modal must survive pointerup until the generated click');
+    assert.deepEqual(await player.evaluate(() => window.underlayEvents), [], 'dismissal must not activate or focus the underlying input');
+    assert.equal(await player.evaluate(() => document.activeElement.id === 'tap-underlay'), false);
+    // The next deliberate tap must work normally; no global timeout swallows user input.
+    await player.touchscreen.tap(195, 400);
+    assert.equal(await player.evaluate(() => document.activeElement.id), 'tap-underlay');
     assert.deepEqual(errors, []);
     console.log('PASS: travel atlas placeholder, roles, cache, dragging, touch, modals, scenery and stale loads');
   } finally { await browser.close(); await fixture.close(); }

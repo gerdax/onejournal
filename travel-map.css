@@ -6,6 +6,7 @@
 }
 .travel-map-launch:focus-visible { outline: 3px solid #d0a15a; outline-offset: 3px; }
 .travel-map-launch[hidden], body:has(.map-viewport.is-fullscreen) .travel-map-launch,
+body:has(.dice-dialog[open]) .travel-map-launch,
 body:has(.travel-map-dialog[open]) .travel-map-launch { display: none; }
 .travel-map-dialog {
   position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none;

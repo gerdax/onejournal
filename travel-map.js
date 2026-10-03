@@ -16,7 +16,7 @@
   const status = dialog.querySelector('.travel-map-status'), message = dialog.querySelector('.travel-map-message');
   const spinner = dialog.querySelector('.travel-map-spinner'), retry = status.querySelector('button');
   let generation = 0, activeImage = null, imageVersion = '', decodedImage = null, decodedVersion = '', savedOverflow = '', owner = identity();
-  let x = 0, y = 0, width = 0, height = 0, gesture = null, viewOpen = false;
+  let x = 0, y = 0, width = 0, height = 0, gesture = null, viewOpen = false, closeOnClick = false;
   const pointers = new Set();
   function identity() { return JSON.stringify(store.access); }
   function blocked() {
@@ -38,7 +38,7 @@
   }
   function close() { if (dialog.open) dialog.close(); finishClose(); }
   function clearView() {
-    generation++; gesture = null; pointers.clear(); dialog.classList.remove('is-dragging');
+    generation++; gesture = null; closeOnClick = false; pointers.clear(); dialog.classList.remove('is-dragging');
     activeImage?.remove(); activeImage = null; imageVersion = '';
   }
   function finishClose() {
@@ -87,6 +87,7 @@
   });
   retry.addEventListener('click', event => { event.stopPropagation(); void load(); });
   dialog.addEventListener('pointerdown', event => {
+    closeOnClick = false;
     if (event.target.closest('button') || (event.pointerType === 'mouse' && event.button !== 0)) return;
     pointers.add(event.pointerId);
     if (pointers.size > 1) { if (gesture) gesture.cancelled = true; return; }
@@ -107,8 +108,17 @@
     const tap = event.type === 'pointerup' && !gesture.dragged && !gesture.cancelled && pointers.size === 0;
     gesture = null; dialog.classList.remove('is-dragging');
     if (dialog.hasPointerCapture(event.pointerId)) dialog.releasePointerCapture(event.pointerId);
-    if (tap) { event.preventDefault(); close(); }
+    // Keep the modal in place until the compatibility click has been consumed.
+    // Closing on pointerup lets mobile browsers retarget that click to a field below.
+    closeOnClick = tap;
   }
+  dialog.addEventListener('click', event => {
+    if (event.target.closest('button')) return;
+    event.preventDefault(); event.stopPropagation();
+    const shouldClose = closeOnClick;
+    closeOnClick = false;
+    if (shouldClose) close();
+  });
   dialog.addEventListener('pointerup', endPointer);
   dialog.addEventListener('pointercancel', endPointer);
   dialog.addEventListener('lostpointercapture', event => { if (gesture?.id === event.pointerId) { gesture = null; dialog.classList.remove('is-dragging'); } });
