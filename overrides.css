@@ -445,7 +445,7 @@ label, input, select, textarea { min-width: 0; }
 #library > .section-heading { gap: 16px; flex-wrap: wrap; }
 #library .library-transfer { align-items: center; flex-wrap: wrap; }
 
-.footer-copyright { margin-left: auto; color: var(--ink); font-size: 12px; }
+.footer-version { margin-left: auto; color: var(--ink); font-size: 12px; }
 
 
 .kind-field { display: grid; gap: 7px; }

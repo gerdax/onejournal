@@ -1,6 +1,6 @@
 # Kompendium MG
 
-Kompendium jest osobnym modułem onejournal: popup pod ikoną runy, prywatny czytnik PDF oraz statystyki „Kompendium — zużycie” w Ustawieniach. Nie zapisuje rozmów, nie zmienia kampanii i nie dodaje podręcznika do jej kopii zapasowych. Przeglądarka przechowuje rozmowę tylko do przeładowania karty. Zamknięcie popupu jej nie usuwa. Podczas generowania tekst podąża za odpowiedzią tylko wtedy, gdy widok znajduje się blisko końca; przewinięcie w górę pozwala czytać wcześniejszą treść. Enter wysyła pytanie, a Shift+Enter wstawia nową linię. Zmiana strony czytnika przewija na górę; powiększenie zachowuje pozycję.
+Kompendium jest osobnym modułem onejournal: popup pod ikoną runy, prywatny czytnik PDF oraz statystyki „Kompendium — zużycie” w Ustawieniach. Nie zapisuje rozmów, nie zmienia kampanii i nie dodaje podręcznika do jej kopii zapasowych. Przeglądarka przechowuje rozmowę tylko do przeładowania karty. Zamknięcie popupu jej nie usuwa. Podczas generowania tekst podąża za odpowiedzią tylko wtedy, gdy widok znajduje się blisko końca; przewinięcie w górę pozwala czytać wcześniejszą treść. Enter wysyła pytanie, a Shift+Enter wstawia nową linię. Zmiana strony czytnika przewija na górę; powiększenie zachowuje pozycję. Kolejne źródła otwierane z tej samej karty aplikacji korzystają z jednej karty czytnika, z nowym biletem dostępu przy każdym kliknięciu. Po zamknięciu czytnika następne źródło otwiera nową kartę.
 
 ## Stan wdrożenia
 

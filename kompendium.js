@@ -31,6 +31,7 @@
   foot.append(status, retry, send); form.append(label, question, keyHint, foot); dialog.append(head, thread, form); document.body.append(dialog);
   let history = [], controller = null, lastQuestion = '', generation = 0, opener = null;
   const handoffs = new Set();
+  let readerWindow = null;
   const nearBottom = () => thread.scrollHeight - thread.clientHeight - thread.scrollTop <= 64;
   const followBottom = follow => { if (follow) thread.scrollTop = thread.scrollHeight; };
   function clear() {
@@ -60,6 +61,9 @@
         if (event.defaultPrevented) return;
         event.preventDefault();
         if (!window.BroadcastChannel) { status.textContent = 'Przeglądarka nie obsługuje otwierania źródeł.'; return; }
+        // A new source supersedes any ticket still being prepared for the previous one.
+        for (const handoff of handoffs) { clearTimeout(handoff.timer); handoff.channel.close(); }
+        handoffs.clear();
         const id = crypto.randomUUID(), channel = new BroadcastChannel('onejournal-reader-' + id);
         const handoff = { channel, timer: null };
         handoffs.add(handoff);
@@ -74,9 +78,23 @@
           } catch (error) { if (handoffs.has(handoff)) { channel.postMessage({ type: 'error', error: error.message }); status.textContent = error.message; } }
           finally { clearTimeout(handoff.timer); handoffs.delete(handoff); setTimeout(() => channel.close(), 1000); }
         };
-        const popup = window.open(`reader.html#channel=${encodeURIComponent(id)}`, '_blank', 'noopener,noreferrer');
-        // With noopener, browsers may return null even when the tab opened.
-        void popup;
+        // A distinct query forces a fresh ticket exchange instead of hash-only navigation.
+        const url = `reader.html?open=${encodeURIComponent(id)}#channel=${encodeURIComponent(id)}`;
+        try {
+          if (!readerWindow || readerWindow.closed) {
+            // Keep our handle for reuse, but remove the reader's access to the game tab
+            // before loading any content. No invitation/session token enters its URL.
+            readerWindow = window.open('about:blank', '_blank');
+            if (!readerWindow) throw new Error('Sprawdź blokadę wyskakujących okien.');
+            readerWindow.opener = null;
+          }
+          readerWindow.location.replace(url);
+          readerWindow.focus();
+        } catch (_) {
+          clearTimeout(handoff.timer); handoffs.delete(handoff); channel.close();
+          readerWindow = null;
+          status.textContent = 'Nie udało się otworzyć czytnika. Kliknij źródło ponownie i sprawdź blokadę wyskakujących okien.';
+        }
       });
       link.addEventListener('auxclick', event => {
         if (event.button === 1) { event.preventDefault(); link.click(); }

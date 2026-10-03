@@ -128,8 +128,23 @@ async function ask(text) {
     await reader.locator('#page').press('Tab');
     await reader.waitForFunction(() => document.querySelector('#status').textContent === 'Strona 1 z 2');
     assert((await reader.locator('main').evaluate(node => node.scrollTop)) > 0, 'manual selection of current page retains position');
+    assert.equal(await reader.evaluate(() => window.opener === null), true, 'reader cannot access game window');
+    const pageCount = context.pages().length;
+    await page.locator('.kompendium-sources a').first().click();
+    await reader.waitForFunction(() => document.querySelector('#status')?.textContent === 'Strona 2 z 2');
+    assert.equal(context.pages().length, pageCount, 'next source reuses existing reader');
+    assert.equal(await reader.locator('main').evaluate(node => node.scrollTop), 0);
+    assert.equal(tickets, 2); assert.equal(redeems, 2);
+    assert.equal(await reader.evaluate(() => window.opener === null), true);
     await reader.close();
-    console.log('PASS: ticket handoff and actual second PDF page render');
+    const reopenedPromise = context.waitForEvent('page');
+    await page.locator('.kompendium-sources a').first().click();
+    const reopened = await reopenedPromise;
+    await reopened.locator('#status').filter({ hasText: 'Strona 2 z 2' }).waitFor();
+    assert.equal(tickets, 3); assert.equal(redeems, 3);
+    assert.equal(await reopened.evaluate(() => window.opener === null), true);
+    await reopened.close();
+    console.log('PASS: ticket handoff, reader reuse and reopening after close');
 
     mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     await mobileContext.route('**/functions/v1/kompendium', handler);
