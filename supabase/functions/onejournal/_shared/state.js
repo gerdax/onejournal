@@ -59,6 +59,7 @@
     const blocks = raw.blocks.map(block => {
       if (!object(block)) invalid();
       if (block.type === "paragraph") return { type: "paragraph", runs: runs(block.runs) };
+      if (block.type === "horizontalRule") return { type: "horizontalRule" };
       if (block.type !== "bulletList" && block.type !== "orderedList" || !Array.isArray(block.items)) invalid();
       entries += block.items.length;
       if (entries > 5000) invalid();

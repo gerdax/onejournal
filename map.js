@@ -480,7 +480,7 @@
         const replacement = panel.querySelector(direction < 0 ? '.map-cycle-prev' : '.map-cycle-next');
         if (replacement) replacement.focus();
       });
-      const navigation = el('div', 'map-panel-navigation'); navigation.append(deselect, previous, next);
+      const navigation = el('div', 'map-panel-navigation'); navigation.append(previous, next, deselect);
       lastSelectedByType[person.type] = person.id;
       const otherType = person.type === 'hero' ? 'enemy' : 'hero';
       const otherParticipants = participants.filter(item => item.type === otherType);
@@ -513,7 +513,7 @@
     else addAdjuster(resources, person.id, 'hate', person.hate, person.maxHate, person.resourceType === 'determination' ? 'Determinacja' : 'Nienawiść', person.hate === 0 && !person.weary);
     panel.appendChild(resources);
     const facts = el('div', 'map-panel-facts map-panel-hero-facts');
-    const factValues = person.type === 'hero' ? [['Obrona', person.parry], ['Pancerz', person.armour], ['Obciąż.', person.load], ['Cień', person.shadow]] : [['Zajadł.', person.fierceness], ['Potęga', person.might], ['Obrona', person.parry], ['Pancerz', person.armour]];
+    const factValues = person.type === 'hero' ? [['PT Siły', person.strengthTN], ['Obrona', person.parry], ['Pancerz', person.armour], ['Obciąż.', person.load]] : [['Zajadł.', person.fierceness], ['Potęga', person.might], ['Obrona', person.parry], ['Pancerz', person.armour]];
     for (const [label, value] of factValues) { const fact = el('div'); fact.append(el('span', '', label), el('strong', label === 'Obciąż.' && warnings.load ? 'is-resource-warning' : '', value ?? '—')); facts.appendChild(fact); }
     panel.appendChild(facts);
 

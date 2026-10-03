@@ -47,8 +47,8 @@ const { startFixture } = require('./fixture-server.cjs');
     await waitSelection(ids[0]);
     const deselect = page.getByRole('button', { name: 'Odznacz postać' });
     assert.equal(await deselect.getAttribute('title'), 'Odznacz postać');
-    assert.deepEqual(await page.locator('.map-panel-navigation button').evaluateAll(nodes => nodes.map(n => n.className)), ['map-deselect', 'map-cycle-prev', 'map-cycle-next']);
-    assert.equal(await deselect.evaluate(node => { const next = node.nextElementSibling; const a = node.getBoundingClientRect(), b = next.getBoundingClientRect(); return a.width === a.height && a.width === b.width && getComputedStyle(node).borderRadius === getComputedStyle(next).borderRadius; }), true);
+    assert.deepEqual(await page.locator('.map-panel-navigation button').evaluateAll(nodes => nodes.map(n => n.className)), ['map-cycle-prev', 'map-cycle-next', 'map-deselect']);
+    assert.equal(await deselect.evaluate(node => { const next = node.previousElementSibling; const a = node.getBoundingClientRect(), b = next.getBoundingClientRect(); return a.width === a.height && a.width === b.width && getComputedStyle(node).borderRadius === getComputedStyle(next).borderRadius; }), true);
     await deselect.click();
     await waitSelection(null);
 

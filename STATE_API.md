@@ -16,8 +16,9 @@ the editor retains its draft until the user explicitly retries.
 Additional properties: `access: {role: 'gm'|'player', heroId}`, `connection`,
 `canWrite`, `heroVersions`, `selection`, `catalog` (GM only), and `rolls`.
 `notebook` is `{document,version}` for the GM and `null` for players. Its
-document is `{blocks:[...]}`: paragraph blocks have `runs`, and `bulletList` or
-`orderedList` blocks have `items` containing run arrays. Each run has `text`
+document is `{blocks:[...]}`: paragraph blocks have `runs`, `bulletList` or
+`orderedList` blocks have `items` containing run arrays, and `horizontalRule`
+blocks have no content. Each run has `text`
 and optional `bold`, `italic`, or `underline` fields set to `true`. The empty
 document is `{blocks:[]}`. Reads are detached. `saveNotebook(document, version?)`
 uses an independent notebook version (defaulting to the current snapshot),
