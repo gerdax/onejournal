@@ -194,7 +194,7 @@
               if (!name) { status(conflictStatus); return; }
               if (!validForm([name], editor)) { status("Popraw zaznaczone pole."); return; }
               const control = editor.elements[name];
-              const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim();
+              const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value;
               const sent = booleans.has(name) ? control.checked : control.value;
               saving = true; let succeeded = false; status("Zapisywanie…");
               try {
@@ -382,7 +382,7 @@
     if (!name) { status(conflictStatus); return; }
     if (!validForm([name])) { status("Popraw zaznaczone pole."); return; }
     const id = editingId, control = form.elements[name];
-    const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim();
+    const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value;
     const sent = booleans.has(name) ? control.checked : control.value;
     savingField = true; let succeeded = false; status("Zapisywanie…");
     try {
