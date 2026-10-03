@@ -4,7 +4,7 @@
 const { createStore, normalizeNotebook } = typeof require === "function" ? require("./state.js") : globalThis.OneRingState;
 const DiceRules = typeof require === "function" ? require("./dice-rules.js") : globalThis.DiceRules;
 const MAX_ROLLS = 10000;
-const GM_METHODS = new Set(["addEnemy", "removeParticipant", "clearBattle", "clearEncounter", "toggleDefeated", "setEnemyWound", "setEnemyWeary", "setEnemyNotes", "adjustResource", "reorderEnemies", "addLibrary", "removeLibrary", "importLibrary", "saveHero", "deleteHero", "addHero", "setMap", "moveToken", "removeMap", "loadMap", "restoreBackup", "selectToken"]);
+const GM_METHODS = new Set(["addEnemy", "removeParticipant", "clearBattle", "clearEncounter", "toggleDefeated", "setEnemyWound", "setEnemyWeary", "setEnemyNotes", "adjustResource", "reorderEnemies", "addLibrary", "removeLibrary", "importLibrary", "saveHero", "deleteHero", "addHero", "setMap", "moveToken", "removeMap", "setMapFavorite", "loadMap", "restoreBackup", "selectToken"]);
 const own = (x, key) => Object.prototype.hasOwnProperty.call(x, key);
 const clone = x => JSON.parse(JSON.stringify(x));
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error; };
@@ -167,6 +167,7 @@ function validateMethodInput(method, args, access, doc, heroVersion) {
     if (Object.keys(args[0]).some(key => key !== "id" && (key === "defeated" || (!own(assigned, key) && !/^(weapon[0-3]|helm|shield)Enabled$/.test(key))))) fail(403, "To pole może zmieniać tylko mistrz gry.");
   }
   if (["addEnemy", "addLibrary"].includes(method) && args[0]?.might != null && (!finiteInt(args[0].might) || args[0].might > 5)) fail(400, "Potęga musi wynosić od 0 do 5.");
+  if (method === "setMapFavorite" && (args.length !== 2 || typeof args[0] !== "string" || typeof args[1] !== "boolean")) fail(400, "Nieprawidłowe ulubione scenerie.");
   if (method === "setEnemyNotes") {
     if (args.length !== 3 || args.some(value => typeof value !== "string")) fail(400, "Nieprawidłowe notatki przeciwnika.");
     const enemy = doc.state.battle.find(e => e.id === args[0]);
@@ -392,7 +393,7 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
             doc.grants = doc.grants.filter(g => g.role === "gm" || ids.has(g.heroId));
           }
           if (request.method === "deleteHero") delete doc.heroVersions[request.args[0]];
-          publicChange = !["addLibrary", "removeLibrary", "importLibrary", "removeMap", "setEnemyWound", "setEnemyWeary", "setEnemyNotes"].includes(request.method);
+          publicChange = !["addLibrary", "removeLibrary", "importLibrary", "removeMap", "setMapFavorite", "setEnemyWound", "setEnemyWeary", "setEnemyNotes"].includes(request.method);
           if (request.method === "setEnemyWound") {
             const before = oldState.battle.find(enemy => enemy.id === request.args[0]);
             const after = doc.state.battle.find(enemy => enemy.id === request.args[0]);

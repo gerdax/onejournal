@@ -42,6 +42,7 @@ test('private library, idempotent upload, active image access and retained delet
   const first = await f.core.handle('gm', upload);
   assert.equal(first.result.imageId, imageId(full));
   assert.equal(first.result.thumbnailId, imageId(thumb));
+  assert.equal(first.result.favorite, false);
   assert.equal(first.result.uploadedAt.length > 10, true);
   assert.equal(f.doc.publicRevision, playerBefore.revision);
   assert.deepEqual((await f.core.handle('gm', upload)).result, first.result);
@@ -62,6 +63,24 @@ test('private library, idempotent upload, active image access and retained delet
   assert.equal(f.doc.state.map.imageId, first.result.imageId);
   assert.equal((await f.core.handle('player', { action: 'mapGet', imageId: first.result.imageId })).dataUrl, upload.dataUrl);
   await assert.rejects(f.core.handle('gm', { action: 'command', method: 'loadMap', args: [upload.id] }), { status: 400 });
+});
+
+test('favorites are GM-only, private, durable and preserved on upload retry', async () => {
+  const f = fixture(); await player(f);
+  await f.core.handle('gm', upload);
+  const before = f.doc.publicRevision;
+  const changed = await f.core.handle('gm', { action: 'command', method: 'setMapFavorite', args: [upload.id, true] });
+  assert.equal(changed.result.favorite, true);
+  assert.equal(f.doc.state.mapLibrary[0].favorite, true);
+  assert.equal(f.doc.publicRevision, before);
+  assert.equal((await f.core.handle('gm', upload)).result.favorite, true);
+  assert.equal((await f.core.handle('player', { action: 'snapshot' })).state.mapLibrary, undefined);
+  await assert.rejects(f.core.handle('player', { action: 'command', method: 'setMapFavorite', args: [upload.id, false] }), { status: 403 });
+  await assert.rejects(f.core.handle('gm', { action: 'command', method: 'setMapFavorite', args: [upload.id, 'yes'] }), { status: 400 });
+  await assert.rejects(f.core.handle('gm', { action: 'command', method: 'setMapFavorite', args: ['missing', true] }), { status: 400 });
+  assert.equal(f.doc.state.mapLibrary[0].favorite, true);
+  await f.core.handle('gm', { action: 'command', method: 'setMapFavorite', args: [upload.id, false] });
+  assert.equal(f.doc.state.mapLibrary[0].favorite, false);
 });
 
 test('a queued image read after map switch conflicts without revoking the player session', async () => {
@@ -111,6 +130,7 @@ test('rejects malformed bytes and unauthorized image references', async () => {
 test('portable backup stages all refs, validates before restore, and retains old library for legacy backup', async () => {
   const source = fixture();
   await source.core.handle('gm', upload);
+  await source.core.handle('gm', { action: 'command', method: 'setMapFavorite', args: [upload.id, true] });
   await source.core.handle('gm', { action: 'command', method: 'loadMap', args: [upload.id] });
   const backup = await source.core.handle('gm', { action: 'export' });
   assert.deepEqual(Object.keys(backup.maps).sort(), [imageId(full), imageId(thumb)].sort());
@@ -134,12 +154,14 @@ test('portable backup stages all refs, validates before restore, and retains old
   await dest.core.handle('gm', { action: 'mapStage', dataUrl: upload.thumbnailDataUrl, thumbnail: true });
   await dest.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [staged] });
   assert.equal(dest.doc.state.mapLibrary[0].name, 'Moria');
+  assert.equal(dest.doc.state.mapLibrary[0].favorite, true);
   assert.equal((await dest.core.handle('gm', { action: 'mapGet', imageId: imageId(full) })).dataUrl, upload.dataUrl);
   await assert.rejects(dest.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [{ format: 'onejournal', version: 1, state: backup.state, rolls: [] }] }), { status: 400 });
   const legacy = { format: 'onejournal', version: 1, state: { ...backup.state, map: null }, rolls: [] };
   delete legacy.state.mapLibrary;
   await dest.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [legacy] });
   assert.equal(dest.doc.state.mapLibrary[0].name, 'Moria');
+  assert.equal(dest.doc.state.mapLibrary[0].favorite, true);
 });
 
 test('state normalizes legacy saves and validates image map geometry', () => {
@@ -152,4 +174,23 @@ test('state normalizes legacy saves and validates image map geometry', () => {
   assert.throws(() => store.setMap({ kind: 'image', imageId: imageId(full), width: 1024, height: 1024, positions: {} }), /Invalid image map/);
   assert.throws(() => store.setMap({ kind: 'image', imageId: [imageId(full)], width: 1200, height: 1200, positions: {} }), /Invalid image map/);
   assert.equal(store.getState().map.width, 1200);
+});
+
+test('state normalizes old map entries and validates favorite mutation', () => {
+  const old = { version: 2, library: [], battle: [], heroes: [], heroParticipants: [], map: null,
+    mapLibrary: [{ id: upload.id, name: upload.name, uploadedAt: '2026-01-01T00:00:00.000Z', imageId: imageId(full), thumbnailId: imageId(thumb) }] };
+  const disk = { value: JSON.stringify(old), getItem() { return this.value; }, setItem(_key, value) { this.value = value; } };
+  const store = createStore(disk);
+  assert.equal(store.getState().mapLibrary[0].favorite, false);
+  assert.throws(() => store.setMapFavorite(upload.id, 1), /Invalid map favorite/);
+  assert.throws(() => store.setMapFavorite('missing', true), /Unknown map/);
+  assert.equal(store.setMapFavorite(upload.id, true).favorite, true);
+  assert.equal(createStore(disk).getState().mapLibrary[0].favorite, true);
+  const backup = store.exportBackup();
+  const restored = createStore(); restored.restoreBackup(backup);
+  assert.equal(restored.getState().mapLibrary[0].favorite, true);
+  const malformed = structuredClone(backup); malformed.mapLibrary[0].favorite = 'true';
+  assert.throws(() => restored.restoreBackup(malformed), /Invalid map favorite/);
+  assert.deepEqual(restored.exportBackup(), backup);
+  assert.equal(store.addMap({ ...old.mapLibrary[0] }).favorite, true);
 });

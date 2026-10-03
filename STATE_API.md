@@ -155,12 +155,14 @@ backup before replacing state, and throws when it is invalid.
 Image maps use `{kind:'image',imageId,width:1200,height:1200,positions:{}}`.
 Their source JPEG is 1024 × 1024 (at most 2 MiB); token coordinates use the
 1200 × 1200 display space. Generated map records keep their existing shape.
-`state.mapLibrary` contains GM-only records `{id,name,uploadedAt,imageId,thumbnailId}`;
+`state.mapLibrary` contains GM-only records `{id,name,uploadedAt,imageId,thumbnailId,favorite}`;
 missing `mapLibrary` in old state normalizes to an empty list. Both image IDs
 are SHA-256 hashes of JPEG bytes, and thumbnails are 384 × 384 (at most 256 KiB).
+Missing `favorite` in older records normalizes to `false`. `setMapFavorite(id, favorite)`
+accepts a boolean and updates the GM-only record; only the GM revision advances.
 Cloud `uploadMap({id,name,dataUrl,thumbnailDataUrl})` returns the server-stamped
 record. Repeating an upload ID with the same name and bytes returns that record;
-reusing it with different content conflicts. `getMapImage(imageId)` returns
+its `favorite` value is preserved. Reusing it with different content conflicts. `getMapImage(imageId)` returns
 `{imageId,dataUrl}`. The GM can fetch images referenced by the library or active
 map; players can fetch only the active full image. `loadMap(id)` activates a
 library image and resets positions while preserving battle participants.
