@@ -46,3 +46,27 @@ Usunięcie mapy z biblioteki nie usuwa aktywnego tła ani fizycznych obiektów S
 ## Warunkowe odświeżanie snapshotów
 
 Optymalizacja odświeżania wymaga opublikowania nowego `server-core.js`: uruchom `node scripts/admin-build.mjs`, wdróż funkcję `onejournal`, a następnie frontend. Nie wymaga migracji bazy. Kontrola dostępu wykonywana jest przy każdym odczycie, także gdy stan się nie zmienił. Stary klient nadal otrzymuje pełne snapshoty; nowy klient działa ze starym backendem, ale bez oszczędności transferu. Kolejka zapisów, Realtime i polling co 5 sekund pozostają bez zmian. Krótka odpowiedź zmniejsza transfer Edge → przeglądarka i koszt projekcji/rysowania; funkcja nadal odczytuje dokument bazy.
+
+## Prywatne mapy podróży
+
+1. Zastosuj migrację `202610030003_travel_maps.sql`. Tworzy prywatny bucket
+   `onejournal-travel-maps` z dostępem wyłącznie przez service role.
+2. Umieść oryginały `JP_MAPA-ERIADORU.pdf` i `JP_MAPA-PODROZY.pdf` w lokalnym
+   `maps/` (ignorowane przez Git). Uruchom `node scripts/travel-maps.mjs prepare`.
+   Wymagany jest Poppler `pdftoppm` (opcjonalna ścieżka w `PDFTOPPM`).
+   Skrypt tworzy JPEG 4096 px / jakość 92 i manifest SHA-256 w ignorowanym
+   `private-travel-maps/`. Sprawdź czytelność nazw. Nie dodawaj tych plików do Gita.
+3. W zaufanym terminalu ustaw `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY`,
+   następnie uruchom `node scripts/travel-maps.mjs upload`. Skrypt publikuje
+   najpierw oba obrazy z niezmiennymi nazwami opartymi na hashach, a na końcu
+   `manifest.json`. Nie umieszczaj klucza administracyjnego w konfiguracji frontendu.
+4. Uruchom `node scripts/admin-build.mjs`, wdróż Edge Function `onejournal`,
+   następnie zbuduj i opublikuj frontend standardową procedurą projektu.
+5. Sprawdź oba dostępy: MG otrzymuje mapę podróży, gracz Eriador. Ponowne otwarcie
+   wysyła `knownVersion` i otrzymuje `unchanged: true` bez bajtów obrazu.
+
+Aktualizacja map wymaga ponowienia przygotowania i uploadu. Stare obrazy nie są
+automatycznie usuwane. Mapy nie trafiają do `dist`, service workera ani kopii
+kampanii. Cache obejmuje tylko pamięć bieżącej karty; cofnięcie dostępu usuwa go
+po wykryciu przez aplikację. Przy chwilowym braku sieci już pobrany obraz pozostaje
+dostępny do zakończenia sesji.

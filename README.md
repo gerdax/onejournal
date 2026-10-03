@@ -57,3 +57,11 @@ Przenośny kontrakt opisuje [STATE_API.md](STATE_API.md), a warstwę serwerową 
 ## Kompendium MG
 
 Ikona runy otwiera sesyjny czat o zasadach. Odpowiedzi wskazują strony prywatnego podręcznika, a Ustawienia pokazują tokeny i szacunkowy koszt API. Moduł wymaga osobnej funkcji Edge i importu PDF. Instalację, ograniczenia i testy opisuje [KOMPENDIUM.md](KOMPENDIUM.md).
+
+Mapa podróży: przycisk róży wiatrów w lewym dolnym rogu otwiera prywatną mapę
+Eriadoru dla gracza lub podróży dla MG. Przeciągnij, aby przesuwać; kliknij lub
+naciśnij Escape, aby zamknąć. Bez zoomu. Przycisk nie jest dostępny w modalu
+ani pełnoekranowej scenerii. Obraz jest przechowywany w pamięci sesji; ponowne
+otwarcie sprawdza tylko wersję, a odświeżenie strony usuwa cache.
+Test: `NODE_PATH=<katalog-node_modules> node tests/travel-map-online.cjs`.
+Przygotowanie prywatnych zasobów i wdrożenie opisuje DEPLOYMENT.md.

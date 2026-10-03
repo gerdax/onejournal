@@ -8,7 +8,7 @@
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
   const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'setEnemyWeary', 'setEnemyNotes', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'removeMap', 'setMapFavorite', 'loadMap', 'restoreBackup', 'selectToken'];
   function createStore(transport) {
-    let snapshot = null, connection = 'connecting', listeners = new Set(), tail = Promise.resolve(), refreshing, stopped = false, epoch = 0;
+    let snapshot = null, connection = 'connecting', listeners = new Set(), tail = Promise.resolve(), refreshing, stopped = false, epoch = 0, travelMapCache = null, travelMapReading = null;
     let requestOrder = 0, appliedOrder = 0, refreshGeneration = 0;
     const empty = { version: 2, library: [], battle: [], heroes: [], heroParticipants: [], mapLibrary: [], map: null };
     function emit() { for (const fn of listeners) { try { fn(store.getState()); } catch (error) { console.error('State observer failed', error); } } }
@@ -21,6 +21,7 @@
       const stale = snapshot && (sameScope && Number(next.revision) < Number(snapshot.revision) ||
         order < appliedOrder && (!sameScope || Number(next.revision) === Number(snapshot.revision)));
       const changed = !stale && (!snapshot || JSON.stringify(next) !== JSON.stringify(snapshot));
+      if (!stale && snapshot && !sameScope) { epoch++; travelMapCache = null; travelMapReading = null; }
       if (changed) snapshot = next;
       if (!stale) appliedOrder = Math.max(appliedOrder, order);
       const transitioned = connection !== 'online';
@@ -29,7 +30,7 @@
     }
     function failed(error) {
       const previous = connection, hadSnapshot = !!snapshot;
-      if (error.status === 401 || error.status === 403) { epoch++; snapshot = null; connection = 'revoked'; transport.stop?.(); }
+      if (error.status === 401 || error.status === 403) { epoch++; snapshot = null; travelMapCache = null; travelMapReading = null; connection = 'revoked'; transport.stop?.(); }
       else if (!error.status || error.status >= 500) {
         connection = 'offline'; refreshGeneration++; refreshing = null;
       }
@@ -79,7 +80,7 @@
       getParticipants() { return clone(snapshot?.participants || []); },
       subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
       async connect(secret) {
-        epoch++; refreshGeneration++; stopped = false; refreshing = null; connection = 'connecting'; emit();
+        epoch++; refreshGeneration++; stopped = false; refreshing = null; snapshot = null; travelMapCache = null; travelMapReading = null; connection = 'connecting'; emit();
         const order = ++requestOrder;
         const response = await request(secret ? { action: 'exchange', secret } : { action: 'snapshot' });
         // Opening a new link may deliberately switch role and reset revisions.
@@ -120,12 +121,35 @@
         }
         return refreshing;
       },
-      markOffline() { if (connection !== 'revoked') { epoch++; refreshGeneration++; refreshing = null; const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); } },
-      stop() { epoch++; refreshGeneration++; refreshing = null; stopped = true; transport.stop?.(); const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); },
+      markOffline() { if (connection !== 'revoked') { epoch++; travelMapReading = null; refreshGeneration++; refreshing = null; const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); } },
+      stop() { epoch++; travelMapCache = null; travelMapReading = null; refreshGeneration++; refreshing = null; stopped = true; transport.stop?.(); const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); },
       exportBackup() { return enqueue({ action: 'export' }); },
       getAvatar(heroId) { return enqueue({ action: 'avatarGet', heroId }); },
       uploadMap({ id, name, dataUrl, thumbnailDataUrl }) {
         return enqueue({ action: 'mapUpload', id, name, dataUrl, thumbnailDataUrl }, true).then(response => clone(response.result));
+      },
+      getCachedTravelMap() { return clone(travelMapCache); },
+      getTravelMap() {
+        if (stopped || !snapshot || !['online', 'offline'].includes(connection)) return Promise.reject(new Error('Brak aktywnej sesji. Zaczekaj na synchronizację.'));
+        if (connection === 'offline' && travelMapCache) return Promise.resolve(clone(travelMapCache));
+        if (travelMapReading) return travelMapReading.then(clone);
+        const readEpoch = epoch;
+        const cached = travelMapCache;
+        const mapId = snapshot.access.role === 'gm' ? 'podrozy' : 'eriador';
+        const reading = request({ action: 'travelMapGet', ...(cached ? { knownVersion: cached.version } : {}) }).then(response => {
+          if (epoch !== readEpoch || stopped) throw staleSession();
+          if (!response || response.mapId !== mapId || typeof response.version !== 'string' || !/^[a-f0-9]{64}$/.test(response.version)) throw new Error('Nieprawidłowa odpowiedź mapy podróży.');
+          if (response.unchanged === true) {
+            if (!cached || cached.mapId !== response.mapId || cached.version !== response.version) throw new Error('Brakuje zapisanej mapy podróży.');
+            travelMapCache = cached;
+          } else {
+            if (typeof response.dataUrl !== 'string' || !response.dataUrl.startsWith('data:image/jpeg;base64,')) throw new Error('Nieprawidłowy obraz mapy podróży.');
+            travelMapCache = { mapId: response.mapId, version: response.version, dataUrl: response.dataUrl };
+          }
+          return clone(travelMapCache);
+        }).finally(() => { if (travelMapReading === reading) travelMapReading = null; });
+        travelMapReading = reading;
+        return reading;
       },
       getMapImage(imageId) { return enqueue({ action: 'mapGet', imageId }); },
       setAvatar(heroId, dataUrl, heroVersion) {

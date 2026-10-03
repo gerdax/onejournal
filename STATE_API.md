@@ -262,3 +262,14 @@ a generic roll (default private); a selected hero/enemy means a bound roll
 opening retain the manual choice. Selection changes during animation cannot
 redirect a prepared roll or its resource cost. `selectToken(null)` clears the
 GM selection; the player UI remains attached to its own hero.
+
+## Private travel atlas (not campaign state)
+
+`getCachedTravelMap()` returns a detached `{mapId, version, dataUrl}` or null.
+`getTravelMap()` performs a direct, deduplicated authorized read and returns the
+full image, reusing the session cache when the server reports an unchanged version.
+`travelMapGet` accepts optional `knownVersion`; the server chooses `eriador` for
+players and `podrozy` for GM and never accepts a client-selected storage path.
+Cache is cleared on connect, access identity changes, revocation and stop.
+Temporary offline state retains already downloaded bytes; no persistent storage
+or campaign revision, backup, scenery or realtime state is involved.

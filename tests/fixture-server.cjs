@@ -42,7 +42,13 @@ async function startFixture(options = {}) {
     get: async id => mapFiles.get(id) || null,
     put: async (id, dataUrl) => { mapFiles.set(id, dataUrl); }
   };
-  const core = createServerCore({ repository, avatarStorage, mapStorage, hashSecret: hash, randomSecret: () => 'fixture-random-secret-' + crypto.randomBytes(12).toString('hex'), encryptSecret: value => value, decryptSecret: value => value, catalog });
+  const travelBytes = fs.readFileSync(path.join(__dirname, 'fixtures/map-1024.jpg'));
+  const travelVersion = hash(travelBytes);
+  const travelMapStorage = options.travelMapStorage || {
+    getManifest: async () => ({ maps: Object.fromEntries(['eriador', 'podrozy'].map(id => [id, { version: travelVersion, path: `${id}-${travelVersion}.jpg` }])) }),
+    get: async () => `data:image/jpeg;base64,${travelBytes.toString('base64')}`
+  };
+  const core = createServerCore({ repository, avatarStorage, mapStorage, travelMapStorage, hashSecret: hash, randomSecret: () => 'fixture-random-secret-' + crypto.randomBytes(12).toString('hex'), encryptSecret: value => value, decryptSecret: value => value, catalog });
   // Opt-in audit controls: no effect on existing test callers.
   let responseDelay = options.responseDelay || 0;
   const requests = [], failures = [], snapshotListeners = new Set();
