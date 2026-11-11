@@ -161,3 +161,6 @@
 .hero-history-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .hero-history-preview .hero-editor { width: 100%; }
 .hero-history-preview input:disabled, .hero-history-preview textarea:disabled, .hero-history-preview select:disabled { opacity: 1; color: inherit; }
+
+.hero-save-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+.hero-save-meta .hero-history-link { font-size: 12px; font-weight: 400; color: var(--muted); padding: 0; min-height: 0; text-decoration: underline; text-underline-offset: 3px; }
