@@ -124,6 +124,10 @@
       markOffline() { if (connection !== 'revoked') { epoch++; travelMapReading = null; refreshGeneration++; refreshing = null; const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); } },
       stop() { epoch++; travelMapCache = null; travelMapReading = null; refreshGeneration++; refreshing = null; stopped = true; transport.stop?.(); const changed = connection !== 'offline'; connection = 'offline'; if (changed) emit(); },
       exportBackup() { return enqueue({ action: 'export' }); },
+      getHeroHistory(heroId) { return enqueue({ action: 'heroHistory', heroId }).then(clone); },
+      restoreHeroHistory(heroId, historyId, heroVersion) {
+        return enqueue({ action: 'heroHistoryRestore', heroId, historyId, heroVersion }, true).then(response => clone(response.result));
+      },
       getAvatar(heroId) { return enqueue({ action: 'avatarGet', heroId }); },
       uploadMap({ id, name, dataUrl, thumbnailDataUrl }) {
         return enqueue({ action: 'mapUpload', id, name, dataUrl, thumbnailDataUrl }, true).then(response => clone(response.result));

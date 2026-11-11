@@ -38,6 +38,7 @@ async function rpc(name: string, body: object) {
 }
 const repository = {
   get: () => rpc("onejournal_read", {}),
+  heroHistory: (heroId: string) => rpc("onejournal_hero_history", { hero_id: heroId }),
   compareAndSwap: (expected: number, document: object, publicChange: boolean) =>
     rpc("onejournal_cas", { expected_revision: expected, document, notify_public: publicChange })
 };
@@ -177,7 +178,7 @@ Deno.serve(async request => {
     const result = await core.handle(user.id, body);
     return json(result, 200, cors);
   } catch (error) {
-    const status = [400, 401, 403, 409, 413].includes(error?.status) ? error.status : 500;
+    const status = [400, 401, 403, 404, 409, 413].includes(error?.status) ? error.status : 500;
     if (status === 500) console.error(error);
     return json({ error: status === 500 ? "Błąd serwera." : error.message }, status, cors);
   }

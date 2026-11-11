@@ -370,3 +370,21 @@ test('obsolete conditional denial still revokes the current session and its full
   assert.deepEqual(store.getState().heroes, []);
   assert.equal(store.connection, 'revoked');
 });
+
+
+test('history reads are detached and restores carry the explicitly captured hero version', async () => {
+  const calls = [], history = [{id:'event',heroId:'h',hero:{id:'h',name:'Old'}}];
+  const store = createStore({request:async body => {
+    calls.push(body);
+    if (body.action === 'heroHistory') return history;
+    const data = snapshot(body.action === 'heroHistoryRestore' ? 2 : 1); data.access = {role:'gm',heroId:null};
+    if (body.action === 'heroHistoryRestore') data.result = {id:'h',name:'Old'};
+    return data;
+  }});
+  await store.connect();
+  const read = await store.getHeroHistory('h'); read[0].hero.name = 'Changed locally';
+  assert.equal(history[0].hero.name,'Old');
+  assert.deepEqual(await store.restoreHeroHistory('h','event',1),{id:'h',name:'Old'});
+  assert.deepEqual(calls[2],{action:'heroHistoryRestore',heroId:'h',historyId:'event',heroVersion:1});
+  assert.equal(store.heroVersions.h,2);
+});

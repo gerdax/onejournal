@@ -5,7 +5,9 @@ const { createServerCore, defaultDocument } = require('../server-core.js');
 function fixture() {
   let doc = defaultDocument();
   let secretCounter = 0;
+  const history = [];
   const repository = {
+    async heroHistory(heroId) { return structuredClone(history.filter(entry => entry.heroId === heroId)); },
     async get() { return structuredClone(doc); },
     async compareAndSwap(expected, next) {
       if (doc.revision !== expected) return false;
@@ -16,7 +18,7 @@ function fixture() {
   const core = createServerCore({ repository, hashSecret: x => `hash:${x}`, randomSecret: () => `secret-${String(++secretCounter).padStart(8, '0')}-long-enough`, encryptSecret: x => `encrypted:${x}`, decryptSecret: x => x.slice(10), now: () => '2026-01-01T00:00:00Z' });
   doc.links.push({ id: 'gm-link', role: 'gm', heroId: null, secretHash: 'hash:gm-secret-long-enough', encryptedSecret: 'encrypted:gm-secret-long-enough', version: 1, active: true });
   doc.grants.push({ uid: 'gm', linkId: 'gm-link', version: 1, role: 'gm', heroId: null, active: true });
-  return { core, repository, get doc() { return doc; } };
+  return { core, repository, history, get doc() { return doc; } };
 }
 
 test('conditional snapshots authenticate first and compare exact revision and access', async () => {
@@ -541,4 +543,49 @@ test('enemy notes are private GM edits with atomic content conflicts', async () 
   await assert.rejects(command('setEnemyNotes', [id, 12, 'Stare']), { status: 400 });
   await command('removeParticipant', [id]);
   await assert.rejects(command('setEnemyNotes', [id, 'Szkic', 'Nowe A']), { status: 404 });
+});
+
+
+test('hero history is GM-only, rechecks revocation and restores only the selected complete hero', async () => {
+  const f = fixture();
+  const initial = await f.core.handle('gm', {action:'command', method:'saveHero', args:[{name:'Old', load:17, notes:'private history'}]});
+  const hero = initial.result;
+  f.history.push({id:'history-1',heroId:hero.id,hero:{...hero, injury:'legacy injury', futureField:{preserve:true}},heroVersion:1,recordedAt:'2026-01-01',operation:'update'});
+  const link = await f.core.handle('gm', {action:'rotateLink',heroId:hero.id});
+  await f.core.handle('player', {action:'exchange',secret:link.secret});
+  await assert.rejects(f.core.handle('player', {action:'heroHistory',heroId:hero.id}), {status:403});
+  await assert.rejects(f.core.handle('player', {action:'heroHistoryRestore',heroId:hero.id,historyId:'history-1',heroVersion:1}), {status:403});
+  assert.equal((await f.core.handle('gm', {action:'heroHistory',heroId:hero.id}))[0].hero.notes, 'private history');
+  const updated = await f.core.handle('gm', {action:'command',method:'saveHero',args:[{id:hero.id,name:'New',load:3}],heroVersion:1});
+  f.doc.state.heroes.push({id:'legacy',name:'Legacy',endurance:-7,futureField:'keep'});
+  f.doc.state.library.push({id:'legacy-enemy',name:'Legacy',might:99,futureField:'keep'});
+  const before = structuredClone(f.doc);
+  await assert.rejects(f.core.handle('gm', {action:'heroHistoryRestore',heroId:hero.id,historyId:'history-1',heroVersion:1}), {status:409});
+  assert.deepEqual(f.doc,before);
+  f.history.push({id:'forged',heroId:hero.id,hero:{...hero,id:'another-hero'}});
+  await assert.rejects(f.core.handle('gm', {action:'heroHistoryRestore',heroId:hero.id,historyId:'forged',heroVersion:updated.heroVersions[hero.id]}), {status:404});
+  const result = await f.core.handle('gm', {action:'heroHistoryRestore',heroId:hero.id,historyId:'history-1',heroVersion:updated.heroVersions[hero.id]});
+  assert.equal(result.result.id,hero.id);
+  assert.equal(result.result.name,'Old');
+  assert.equal(result.result.load,17);
+  assert.equal(result.result.injury,'legacy injury');
+  assert.deepEqual(result.result.futureField,{preserve:true});
+  assert.deepEqual(f.doc.state.heroes.find(h => h.id === 'legacy'),before.state.heroes.find(h => h.id === 'legacy'));
+  assert.deepEqual(f.doc.state.library,before.state.library);
+  assert.equal(result.heroVersions[hero.id],3);
+  assert.deepEqual(f.doc.links,before.links);
+  assert.deepEqual(f.doc.rolls,before.rolls);
+  assert.deepEqual(f.doc.state.map,before.state.map);
+  const original = f.repository.heroHistory;
+  f.repository.heroHistory = async id => { const history = await original(id); f.doc.grants.find(g => g.uid === 'gm').active = false; return history; };
+  await assert.rejects(f.core.handle('gm', {action:'heroHistory',heroId:hero.id}), {status:403});
+});
+
+test('hero history restore rejects a missing historical portrait without changing the sheet', async () => {
+  const f = fixture();
+  const hero = (await f.core.handle('gm', {action:'command',method:'saveHero',args:[{name:'Current'}]})).result;
+  f.history.push({id:'portrait',heroId:hero.id,hero:{...hero,name:'Old',avatarId:'a'.repeat(64)}});
+  const before = structuredClone(f.doc);
+  await assert.rejects(f.core.handle('gm', {action:'heroHistoryRestore',heroId:hero.id,historyId:'portrait',heroVersion:1}), {status:409});
+  assert.deepEqual(f.doc,before);
 });

@@ -153,3 +153,11 @@
 .map-hero-sheet[hidden] { display: none; }
 
 .hero-editor input[name="injury"]:disabled { opacity: .55; background: #e8e5df; cursor: not-allowed; }
+
+.hero-history-dialog { width: min(1100px, 94vw); max-height: 90vh; overflow: auto; color: var(--ink, #29251e); background: var(--paper, #f4eddf); border: 1px solid #9a8561; border-radius: 8px; padding: 24px; }
+.hero-history-dialog::backdrop { background: #0009; }
+.hero-history-content > select { max-width: 100%; margin: 12px 8px 12px 0; }
+.hero-history-content > button { margin: 8px; }
+.hero-history-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.hero-history-preview .hero-editor { width: 100%; }
+.hero-history-preview input:disabled, .hero-history-preview textarea:disabled, .hero-history-preview select:disabled { opacity: 1; color: inherit; }

@@ -286,7 +286,26 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
         publicChange = false;
       } else {
         access = accessFor(doc, uid);
-        if (request.action === "mapUpload") {
+        if (request.action === "heroHistoryRestore") {
+          if (access.role !== "gm") fail(403, "Brak uprawnień.");
+          const hero = doc.state.heroes.find(h => h.id === request.heroId);
+          if (!hero) fail(404, "Bohater został usunięty.");
+          if (!Number.isSafeInteger(request.heroVersion) || request.heroVersion !== (doc.heroVersions[hero.id] || 0)) fail(409, "Arkusz bohatera został zmieniony. Otwórz historię ponownie.");
+          if (typeof request.historyId !== "string" || !request.historyId) fail(400, "Nieprawidłowa wersja historii.");
+          const entries = await repository.heroHistory(hero.id);
+          const entry = entries.find(item => item.id === request.historyId && item.heroId === hero.id);
+          if (!entry || !isObject(entry.hero) || entry.hero.id !== hero.id) fail(404, "Ta wersja historii nie jest już dostępna.");
+          if (entry.hero.avatarId) {
+            const image = await avatarStorage.get(entry.hero.avatarId);
+            if (!image || avatarImage(image, hashSecret).id !== entry.hero.avatarId) fail(409, "Brakuje historycznego portretu. Arkusz nie został zmieniony.");
+          }
+          // History comes from the private server repository, never the client.
+          // Replace only this record: normalizing the whole state would rewrite
+          // unrelated legacy data, and edit-time saveHero rules alter snapshots.
+          output = clone(entry.hero);
+          doc.state.heroes[doc.state.heroes.findIndex(h => h.id === hero.id)] = output;
+          doc.heroVersions[hero.id] = request.heroVersion + 1;
+        } else if (request.action === "mapUpload") {
           if (access.role !== "gm") fail(403, "Brak uprawnień.");
           if (typeof request.id !== "string" || !/^[\w-]{1,100}$/.test(request.id) || typeof request.name !== "string" || !request.name.trim() || request.name.length > 200) fail(400, "Nieprawidłowa nazwa mapy.");
           const image = mapImage(request.dataUrl, hashSecret);
@@ -477,7 +496,7 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
         if (request.action === "rotateLink") return output;
         const response = project(doc, access);
         if (request.action === "command") response.result = output === undefined ? null : output;
-        if (request.action === "avatarSet" || request.action === "mapUpload") response.result = output;
+        if (["avatarSet", "mapUpload", "heroHistoryRestore"].includes(request.action)) response.result = output;
         return response;
       }
     }
@@ -486,6 +505,15 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
   return { defaultDocument, snapshot, handle(uid, request) {
     if (typeof uid !== "string" || !uid || !isObject(request)) fail(400, "Nieprawidłowe żądanie.");
     if (["snapshot", "export", "links"].includes(request.action)) return read(uid, request.action, request);
+    if (request.action === "heroHistory") return (async () => {
+      const doc = await repository.get();
+      if (accessFor(doc, uid).role !== "gm") fail(403, "Brak uprawnień.");
+      if (typeof request.heroId !== "string" || !request.heroId || request.heroId.length > 200) fail(400, "Nieprawidłowy bohater.");
+      const entries = await repository.heroHistory(request.heroId);
+      const current = await repository.get();
+      if (accessFor(current, uid).role !== "gm") fail(403, "Brak uprawnień.");
+      return clone(entries);
+    })();
     if (request.action === "travelMapGet") return (async () => {
       const doc = await repository.get();
       const access = accessFor(doc, uid);

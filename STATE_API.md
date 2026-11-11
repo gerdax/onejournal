@@ -13,6 +13,16 @@ confirmation; methods that used to return records retain their result values.
 snapshot version. A stale version rejects with HTTP 409 and refreshes server data;
 the editor retains its draft until the user explicitly retries.
 
+GM-only `getHeroHistory(heroId)` returns detached history entries, newest first,
+limited to 100 (older entries remain in the database). Each entry contains
+`id` (string), `heroId`, `recordedAt`, `operation`, `gameRevision`, `heroVersion`,
+`hero` and `previousHero`. Deletion entries have `hero:null` and retain the prior
+sheet in `previousHero`. `restoreHeroHistory(heroId, historyId, heroVersion)`
+requires an existing hero and an explicit captured current version. The server
+loads the trusted historical snapshot, verifies its portrait, replaces only that
+hero's exact JSON and commits via CAS; stale versions return 409. Players cannot
+read or restore history. See `HERO_HISTORY.md` for retention and recovery limits.
+
 Additional properties: `access: {role: 'gm'|'player', heroId}`, `connection`,
 `canWrite`, `heroVersions`, `selection`, `catalog` (GM only), and `rolls`.
 `notebook` is `{document,version}` for the GM and `null` for players. Its

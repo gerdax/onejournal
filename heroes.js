@@ -76,7 +76,7 @@
 
   function field(label, name, type = "text", extra = "") { return `<label>${label}<input name="${name}" type="${type}" ${extra}></label>`; }
   const displayValue = (control, value) => blankGearValue(control.name, value) ? "" : value == null || value === "" ? (control.type === "number" ? "0" : "") : String(value);
-  function drawEditor(hero, target = form, preferences = sectionOpen, embedded = false) {
+  function drawEditor(hero, target = form, preferences = sectionOpen, embedded = false, historyPreview = false) {
     const form = target, sectionOpen = preferences;
     form.querySelectorAll('[data-sheet-section]').forEach(section => {
       sectionOpen[section.dataset.sheetSection] = section.open;
@@ -137,8 +137,8 @@
     updateResourceWarnings(form);
     form.elements.name.required = true;
     form.elements.name.maxLength = 80;
-    if (hero) window.OneRingAvatars?.mount(form.querySelector('.sheet-avatar-slot'), hero.id);
-    if (hero && !embedded && !isPlayer()) { const actions = form.querySelector(".hero-editor-actions"), footer = form.querySelector(".hero-editor-footer-actions"), inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); const battle = el("button", "text-button", inBattle ? "Usuń z potyczki" : "Dodaj do potyczki"); battle.type = "button"; battle.dataset.heroAction = "battle"; battle.dataset.id = hero.id;  actions.append(battle); const remove = el("button", "text-button danger", "Usuń bohatera"); remove.type = "button"; remove.dataset.heroAction = "delete"; remove.dataset.id = hero.id; footer.append(remove); }
+    if (hero && !historyPreview) window.OneRingAvatars?.mount(form.querySelector('.sheet-avatar-slot'), hero.id);
+    if (hero && !embedded && !isPlayer()) { const actions = form.querySelector(".hero-editor-actions"), footer = form.querySelector(".hero-editor-footer-actions"), inBattle = store.getState().heroParticipants.some(p => p.heroId === hero.id); const battle = el("button", "text-button", inBattle ? "Usuń z potyczki" : "Dodaj do potyczki"); battle.type = "button"; battle.dataset.heroAction = "battle"; battle.dataset.id = hero.id;  actions.append(battle); const history = el("button", "text-button", "Historia arkusza"); history.type = "button"; history.dataset.heroAction = "history"; history.dataset.id = hero.id; actions.append(history); const remove = el("button", "text-button danger", "Usuń bohatera"); remove.type = "button"; remove.dataset.heroAction = "delete"; remove.dataset.id = hero.id; footer.append(remove); }
     if (!embedded) { draftDirty = false; draftVersion = null; dirtyFields.clear(); conflictFields.clear(); }
   }
   function syncInjury(editor, hero, dirty) {
@@ -255,6 +255,54 @@
       };
     }
   };
+  let historyDialog = null;
+  async function openHistory(id) {
+    if (store.access?.role !== "gm" || !canSave()) return;
+    if (draftDirty || savingField) { status("Zapisz lub odrzuć szkic przed otwarciem historii."); return; }
+    historyDialog?.close();
+    const dialog = el("dialog", "hero-history-dialog"), title = el("h2", "", "Historia arkusza: " + (heroById(id)?.name || "Bohater"));
+    const close = el("button", "text-button", "Zamknij"), message = el("p", "", "Wczytywanie historii…"), content = el("div", "hero-history-content");
+    close.type = "button"; close.onclick = () => dialog.close(); message.setAttribute("role", "status");
+    dialog.append(title, close, message, content); document.body.append(dialog); historyDialog = dialog;
+    const unsubscribe = store.subscribe(() => { if (store.access?.role !== "gm") dialog.close(); });
+    dialog.addEventListener("close", () => { unsubscribe(); dialog.remove(); if (historyDialog === dialog) historyDialog = null; }, {once:true});
+    dialog.showModal();
+    const version = store.heroVersions?.[id];
+    try {
+      const entries = await store.getHeroHistory(id);
+      if (!dialog.open) return;
+      message.textContent = entries.length ? "Ostatnie 100 zapisów. Przywrócenie utworzy kolejny zapis historii. Portret jest przywracany razem z arkuszem." : "Brak zapisów historii.";
+      const select = el("select"), preview = el("div", "hero-history-preview"), restore = el("button", "text-button", "Przywróć tę wersję"), download = el("button", "text-button", "Pobierz zapis JSON");
+      select.setAttribute("aria-label", "Zapis historii"); restore.type = download.type = "button";
+      entries.forEach((entry, index) => { const option = el("option", "", `${new Date(entry.recordedAt).toLocaleString("pl-PL")} · ${({baseline:"Zapis początkowy",insert:"Utworzenie",update:"Zmiana",delete:"Usunięcie"})[entry.operation] || "Zapis"} · wersja ${entry.heroVersion ?? "—"}`); option.value = String(index); select.append(option); });
+      const show = () => {
+        const entry = entries[Number(select.value)]; preview.replaceChildren();
+        restore.disabled = !entry?.hero || !heroById(id) || !canSave();
+        if (!entry) return;
+        if (entry.hero) {
+          const sheet = el("form", "hero-editor paper"); sheet.id = "hero-history-preview";
+          drawEditor(entry.hero, sheet, {}, true, true);
+          sheet.querySelectorAll("input,textarea,select,button").forEach(control => { control.disabled = true; });
+          sheet.querySelectorAll("details").forEach(details => { details.open = true; });
+          preview.append(sheet);
+        } else preview.append(el("p", "", "Zapis usunięcia bohatera nie zawiera arkusza do przywrócenia."));
+        const details = el("details"), summary = el("summary", "", "Pełny zapis (wszystkie pola i identyfikator portretu)"), raw = el("pre", "", JSON.stringify(entry, null, 2)); details.append(summary, raw); preview.append(details);
+      };
+      select.onchange = show;
+      download.onclick = () => { const blob = new Blob([JSON.stringify(entries[Number(select.value)], null, 2)], {type:"application/json"}); const url = URL.createObjectURL(blob), link = el("a"); link.href = url; link.download = "historia-bohatera.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+      restore.onclick = async () => {
+        const entry = entries[Number(select.value)];
+        if (!entry?.hero || !confirm("Przywrócić cały arkusz i portret z wybranego zapisu? Bieżący arkusz pozostanie w historii.")) return;
+        restore.disabled = true;
+        try {
+          await store.restoreHeroHistory(id, entry.id, version);
+          if (editingId === id) edit(id);
+          dialog.close();
+        } catch (error) { message.textContent = saveError(error) + " Zamknij i otwórz historię ponownie przed kolejną próbą."; }
+      };
+      if (entries.length) { content.append(select, restore, download, preview); show(); }
+    } catch (error) { if (dialog.open) message.textContent = saveError(error); }
+  }
   function status(text) { const target = form.querySelector(".hero-save-status"); if (target) target.textContent = text; }
   function edit(id) { const hero = heroById(id); if (!hero) return; editingId = id; drawEditor(hero); renderList(); }
   function restoreEditor() { const hero = heroById(editingId); if (hero) drawEditor(hero); }
@@ -338,7 +386,7 @@
       if (draftDirty && canSave() && !savingField && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(200);
     }
   }
-  host.addEventListener("click", async event => { const button = event.target.closest("[data-hero-action]"); if (!button) return; const { heroAction: action, id } = button.dataset; if (action === "new") return createHero(); if (action === "edit") { if (isPlayer() && id !== store.access?.heroId) return; if (!mayDiscard()) return; edit(id); return; } if (isPlayer() || !canSave()) { status("Brak uprawnień lub połączenia."); return; } try { if (action === "battle") { const inBattle = store.getState().heroParticipants.some(p => p.heroId === id); if (inBattle) { if (confirm("Usunąć bohatera z potyczki? Arkusz bohatera zostanie zachowany.")) await store.removeParticipant("hero:" + id); } else await store.addHero(id); } else if (action === "delete" && confirm("Usunąć bohatera oraz jego udział w walce?")) { const heroes = store.getState().heroes, index = heroes.findIndex(hero => hero.id === id), next = heroes[index + 1] || heroes[index - 1]; await store.deleteHero(id); if (editingId === id) { editingId = next ? next.id : null; draftDirty = false; dirtyFields.clear(); if (editingId) edit(editingId); } } } catch (error) { status(saveError(error)); } });
+  host.addEventListener("click", async event => { const button = event.target.closest("[data-hero-action]"); if (!button) return; const { heroAction: action, id } = button.dataset; if (action === "new") return createHero(); if (action === "edit") { if (isPlayer() && id !== store.access?.heroId) return; if (!mayDiscard()) return; edit(id); return; } if (isPlayer() || !canSave()) { status("Brak uprawnień lub połączenia."); return; } try { if (action === "history") { await openHistory(id); } else if (action === "battle") { const inBattle = store.getState().heroParticipants.some(p => p.heroId === id); if (inBattle) { if (confirm("Usunąć bohatera z potyczki? Arkusz bohatera zostanie zachowany.")) await store.removeParticipant("hero:" + id); } else await store.addHero(id); } else if (action === "delete" && confirm("Usunąć bohatera oraz jego udział w walce?")) { const heroes = store.getState().heroes, index = heroes.findIndex(hero => hero.id === id), next = heroes[index + 1] || heroes[index - 1]; await store.deleteHero(id); if (editingId === id) { editingId = next ? next.id : null; draftDirty = false; dirtyFields.clear(); if (editingId) edit(editingId); } } } catch (error) { status(saveError(error)); } });
   list.addEventListener("keydown", event => { const tabs = [...listCards.values()]; if (!tabs.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const current = tabs.indexOf(event.target.closest('[role="tab"]')); let index = current; if (event.key === "Home") index = 0; else if (event.key === "End") index = tabs.length - 1; else index = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; const target = tabs[index]; if (target && mayDiscard()) { edit(target.dataset.id); target.focus(); } });
   let savingField = false, saveTimer = null;
   function scheduleSave(delay = 500) { clearTimeout(saveTimer); saveTimer = setTimeout(saveField, delay); }

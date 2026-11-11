@@ -27,9 +27,20 @@ async function startFixture(options = {}) {
   let doc = defaultDocument();
   doc.state = seed.getState();
   for (const [index, secret] of [gmSecret, ...playerSecrets].entries()) doc.links.push({ id: 'fixture-link-' + index, role: index ? 'player' : 'gm', heroId: index ? heroes[index - 1].id : null, secretHash: hash(secret), encryptedSecret: secret, version: 1, active: true });
+  let historySequence = 0;
+  const heroHistory = heroes.map(hero => ({id:String(++historySequence),heroId:hero.id,hero:copy(hero),recordedAt:new Date().toISOString(),operation:'baseline',gameRevision:0,heroVersion:0}));
   const repository = {
+    heroHistory: async heroId => copy(heroHistory.filter(entry => entry.heroId === heroId).slice(-100).reverse()),
     get: async () => copy(doc),
-    compareAndSwap: async (expected, next) => { if (doc.revision !== expected) return false; doc = copy(next); return true; }
+    compareAndSwap: async (expected, next) => {
+      if (doc.revision !== expected) return false;
+      const ids = new Set([...doc.state.heroes, ...next.state.heroes].map(hero => hero.id));
+      for (const id of ids) {
+        const before = doc.state.heroes.find(hero => hero.id === id), after = next.state.heroes.find(hero => hero.id === id);
+        if (JSON.stringify(before) !== JSON.stringify(after)) heroHistory.push({id:String(++historySequence),heroId:id,hero:after ? copy(after) : null,recordedAt:new Date().toISOString(),operation:!after ? 'delete' : !before ? 'insert' : 'update',gameRevision:next.revision,heroVersion:next.heroVersions[id] ?? null});
+      }
+      doc = copy(next); return true;
+    }
   };
   const catalog = JSON.parse(fs.readFileSync(path.join(root, 'supabase/functions/onejournal/catalog.json'), 'utf8'));
   const avatarFiles = new Map();
