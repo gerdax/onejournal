@@ -140,7 +140,18 @@ function downloadJSON(data,name){const blob=new Blob([JSON.stringify(data,null,2
 $("#export-backup").onclick=async()=>{if(!isGM())return;try{const data=await store.exportBackup();downloadJSON(data,"srodziemie-pelna-kopia.json")}catch(error){showError(error)}};
 $("#restore-backup").onclick=()=>{if(isGM())$("#backup-file").click()};
 $("#backup-file").onchange=async e=>{const file=e.target.files[0];if(!file||!isGM())return;try{const data=JSON.parse(await file.text());if(confirm("Zastąpić wszystkie dane pełną kopią? Obecna biblioteka, bohaterowie, walka i mapa zostaną zastąpione.")){await store.restoreBackup(data);document.querySelector(".storage-warning")?.remove();alert("Przywrócono pełną kopię danych.")}}catch(error){showError(error)}finally{e.target.value=""}};
-store.subscribe(()=>{library=store.getState().library;renderMapCount();renderLibrary()});
+let libraryKey=JSON.stringify(library);
+store.subscribe(()=>{
+  const snapshot=store.getState();
+  const nextLibrary=JSON.stringify(snapshot.library);
+  const lostLibrary=library.some(item=>!snapshot.library.some(next=>next.id===item.id));
+  library=snapshot.library;
+  renderMapCount();
+  if(nextLibrary!==libraryKey){libraryKey=nextLibrary;if($("#opponents").classList.contains("active")&&!$("#library").hidden)renderLibrary();else if(lostLibrary)$("#library-list").replaceChildren()}
+});
+document.addEventListener("one-ring:tab", event => {
+  if (event.detail === "opponents" && !$("#library").hidden) renderLibrary();
+});
 if(store.loadError){const warning=document.createElement("p");warning.className="storage-warning";warning.setAttribute("role","alert");warning.textContent="Nie udało się wczytać zapisu. Oryginalne dane zostały zachowane. "+store.loadError;$(".tabs").before(warning)}
 document.addEventListener("pointerdown",e=>{let button=e.target.closest(".help-tooltip"),all=document.querySelectorAll(".help-tooltip");if(e.pointerType==="touch"&&button){let opening=!button.classList.contains("is-open");all.forEach(x=>{x.classList.remove("is-open");x.setAttribute("aria-expanded","false")});if(opening){button.classList.add("is-open");button.setAttribute("aria-expanded","true")}}else if(!button)all.forEach(x=>{x.classList.remove("is-open");x.setAttribute("aria-expanded","false")})});
 document.querySelectorAll(".help-tooltip").forEach(button=>{button.addEventListener("pointerenter",e=>{if(e.pointerType==="mouse")button.classList.add("is-hovered")});button.addEventListener("pointerleave",()=>button.classList.remove("is-hovered"))});

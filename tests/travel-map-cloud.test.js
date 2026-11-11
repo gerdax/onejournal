@@ -103,3 +103,19 @@ test('travel map retries a failed first read while offline without requiring a s
   assert.equal(store.canWrite, false);
   store.stop(); await assert.rejects(store.getTravelMap());
 });
+
+test('an ignored stale identity snapshot preserves accepted access and private cache', async () => {
+  const refresh = deferred();
+  const store = createStore({ request: async body => {
+    if (body.action === 'travelMapGet') return image('podrozy');
+    if (body.action === 'command') return { ...snap('gm'), revision: 2, result: null };
+    if (body.knownRevision != null) return refresh.promise;
+    return snap('gm');
+  } });
+  await store.connect(); await store.getTravelMap();
+  const pending = store.refresh();
+  await store.saveHero({ id: 'hero' });
+  refresh.resolve(snap('player')); await pending;
+  assert.equal(store.access.role, 'gm');
+  assert.deepEqual(store.getCachedTravelMap(), image('podrozy'));
+});
