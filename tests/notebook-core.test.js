@@ -31,9 +31,11 @@ async function addPlayer(f) {
 test('notebook normalizer canonicalizes extras and rejects malformed or oversized content', () => {
   assert.deepEqual(normalizeNotebook({ blocks: [
     { type: 'paragraph', runs: [{ text: 'A', bold: true, ignored: 'x' }], ignored: 1 },
+    { type: 'horizontalRule', runs: [{ text: 'ignored' }], ignored: 1 },
     { type: 'bulletList', items: [[{ text: 'B', italic: true }]] }
   ], ignored: true }), { blocks: [
     { type: 'paragraph', runs: [{ text: 'A', bold: true }] },
+    { type: 'horizontalRule' },
     { type: 'bulletList', items: [[{ text: 'B', italic: true }]] }
   ] });
   for (const invalid of [null, {}, { blocks: [null] }, { blocks: [{ type: 'heading', runs: [] }] },
@@ -74,6 +76,23 @@ test('notebook optimistic version conflicts, retries, and unrelated game writes'
   const second = await f.core.handle('gm', { action: 'notebookSave', document: note('two'), version: 1 });
   assert.equal(second.result.version, 2);
   await assert.rejects(f.core.handle('gm', { action: 'notebookSave', document: note('one'), version: 0 }), { status: 409 });
+});
+
+test('horizontal rules survive notebook save, snapshot, export and restore', async () => {
+  const f = fixture();
+  const document = { blocks: [
+    { type: 'paragraph', runs: [{ text: 'Przed' }] },
+    { type: 'horizontalRule' },
+    { type: 'paragraph', runs: [{ text: 'Po' }] }
+  ] };
+  const saved = await f.core.handle('gm', { action: 'notebookSave', document, version: 0 });
+  assert.deepEqual(saved.result.document, document);
+  assert.deepEqual((await f.core.handle('gm', { action: 'snapshot' })).notebook.document, document);
+  const backup = await f.core.handle('gm', { action: 'export' });
+  assert.deepEqual(backup.notebook, document);
+  await f.core.handle('gm', { action: 'notebookSave', document: { blocks: [] }, version: 1 });
+  await f.core.handle('gm', { action: 'command', method: 'restoreBackup', args: [backup] });
+  assert.deepEqual(f.doc.notebook, document);
 });
 
 test('backup notebook is optional; present empty clears and malformed content leaves state untouched', async () => {

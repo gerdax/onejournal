@@ -107,8 +107,30 @@ const mapStorage = {
     }
   }
 };
+const travelMapBucket = "onejournal-travel-maps";
+const travelMapStorage = {
+  async getManifest() {
+    const response = await fetch(`${url}/storage/v1/object/authenticated/${travelMapBucket}/manifest.json`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }, cache: "no-store"
+    });
+    if (!response.ok) throw new Error(`Travel map manifest download failed (${response.status})`);
+    const text = await response.text();
+    if (text.length > 16384) throw new Error("Travel map manifest exceeds size limit");
+    return JSON.parse(text);
+  },
+  async get(path: string) {
+    if (!/^(eriador|podrozy)-[a-f0-9]{64}\.jpg$/.test(path)) throw new Error("Invalid travel map path");
+    const response = await fetch(`${url}/storage/v1/object/authenticated/${travelMapBucket}/${path}`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }, cache: "no-store"
+    });
+    if (!response.ok) throw new Error(`Travel map download failed (${response.status})`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > 20 * 1024 * 1024) throw new Error("Travel map exceeds size limit");
+    return `data:image/jpeg;base64,${bytes.toString("base64")}`;
+  }
+};
 const core = createServerCore({
-  repository, avatarStorage, mapStorage, catalog,
+  repository, avatarStorage, mapStorage, travelMapStorage, catalog,
   hashSecret: (secret: string | Uint8Array) => createHash("sha256").update(secret).digest("hex"),
   randomSecret: () => randomBytes(32).toString("base64url"), encryptSecret, decryptSecret
 });

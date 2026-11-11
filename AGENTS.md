@@ -33,24 +33,34 @@ enforce access. GitHub Actions tests and publishes the frontend to Pages.
 
 ## Agent orchestration
 
-- Astra / medium is the default lead: objective, ambiguity, risk, architecture,
+- Sol 6.1 / medium is the default lead: objective, ambiguity, risk, architecture,
   decomposition, ownership, conflict resolution, integration and final acceptance.
-- `explorer`: Luna / low for cheap, bounded, read-heavy exploration and mechanics.
-- `worker`: Sol / medium for normal implementation; use supplied findings.
-- `reviewer`: Sol / high for consequential independent review or difficult bug
-  diagnosis. It reports findings without edits; route fixes to an assigned worker.
-- For a difficult fix needing Sol / high, use an explicit model/effort spawn
-  without the medium worker role: custom agent files override spawn settings.
-- Astra / high is exceptional: unresolved architecture/disagreement, repeated
-  sensible-strategy failure, subtle cross-system behavior or significant security
-  or data-loss uncertainty. Prefer decomposition and verification first, then
-  return to medium after resolving that specific issue.
+- `explorer`: Luna / low for cheap, bounded, read-only exploration, reference lookup
+  and mechanical investigation.
+- `simple_worker`: Luna / low for small, mechanical, clearly specified edits with
+  explicit ownership and straightforward verification. The Sol 6.1 lead inspects
+  its changes and verification before accepting them.
+- `worker`: Sol 6.1 / medium for normal implementation; use supplied findings and
+  avoid rediscovering context already established by the lead or explorer.
+- `reviewer`: Sol 6.1 / high for consequential independent review or difficult bug
+  diagnosis. It reports findings without edits; route fixes to an assigned worker
+  or the lead.
+- For difficult implementation needing Sol 6.1 / high, use an explicit
+  `gpt-6.1-sol` / `high` spawn rather than the fixed medium worker role. Custom
+  agent files may override spawn settings; do not rely on conflicting overrides.
+- `expert`: Astra / medium for exceptionally difficult, isolated architecture or
+  diagnosis: unresolved architectural choices, conflicting evidence, subtle
+  cross-system behavior, repeated failure of sensible Sol approaches, or major
+  security/data-loss uncertainty. It is read-only; Sol 6.1 retains integration
+  and final acceptance.
+- Astra / high is exceptional. Use an explicit `gpt-6-astra` / `high` spawn only
+  when Astra / medium remains insufficient. Prefer decomposition, targeted
+  evidence and verification first, then return control to Sol 6.1 after resolving
+  that specific issue.
 
-Choose the cheapest reliable model automatically; the user need not manage
-routing. The escalation ladder is Luna/low → Sol/medium → Sol/high → Astra/medium
-→ Astra/high; skip levels when the task is already clear. Retry failed cheap work
-once only with materially improved context or strategy; otherwise escalate the
-blocked portion. Task size alone does not justify higher reasoning.
+Choose the cheapest reliable model automatically. Default escalation is
+Luna / low → Sol 6.1 / medium → Sol 6.1 / high → Astra / medium → Astra / high.
+Task size alone does not justify escalation.
 
 Delegate only when savings, bounded isolation, useful parallelism or independent
 verification outweigh coordination. Tiny actions may stay with Astra. Give each

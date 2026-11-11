@@ -14,7 +14,7 @@ const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const copy = value => structuredClone(value);
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
-async function startFixture() {
+async function startFixture({ travelMapStorage: travelMapOverride } = {}) {
   const storage = { getItem: () => null, setItem: () => {} };
   const seed = createStore(storage);
   const heroes = [seed.saveHero({ name: 'Ala', culture: 'Hobbit', hope: 8, maxHope: 10 }), seed.saveHero({ name: 'Bartek', culture: 'Człowiek', hope: 7, maxHope: 9 })];
@@ -41,7 +41,13 @@ async function startFixture() {
     get: async id => mapFiles.get(id) || null,
     put: async (id, dataUrl) => { mapFiles.set(id, dataUrl); }
   };
-  const core = createServerCore({ repository, avatarStorage, mapStorage, hashSecret: hash, randomSecret: () => 'fixture-random-secret-' + crypto.randomBytes(12).toString('hex'), encryptSecret: value => value, decryptSecret: value => value, catalog });
+  const travelBytes = fs.readFileSync(path.join(__dirname, 'fixtures/map-1024.jpg'));
+  const travelVersion = hash(travelBytes);
+  const travelMapStorage = travelMapOverride || {
+    getManifest: async () => ({ maps: Object.fromEntries(['eriador', 'podrozy'].map(id => [id, { version: travelVersion, path: `${id}-${travelVersion}.jpg` }])) }),
+    get: async () => `data:image/jpeg;base64,${travelBytes.toString('base64')}`
+  };
+  const core = createServerCore({ repository, avatarStorage, mapStorage, travelMapStorage, hashSecret: hash, randomSecret: () => 'fixture-random-secret-' + crypto.randomBytes(12).toString('hex'), encryptSecret: value => value, decryptSecret: value => value, catalog });
   const offline = new Set();
   let userSequence = 0;
   const send = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };

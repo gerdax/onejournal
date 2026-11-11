@@ -28,11 +28,8 @@ const { startFixture } = require('./fixture-server.cjs');
     for (const participant of participants) {
       await page.locator('[data-tab="map"]').click();
       await page.evaluate(id => OneRingStore.selectToken(id), participant.id);
-      for (const tab of ['heroes','opponents','battle']) {
-        if (tab === 'battle') {
-          await page.evaluate(() => { location.hash = 'battle'; });
-          await page.waitForFunction(() => document.querySelector('#battle').classList.contains('active'));
-        } else await page.locator(`[data-tab="${tab}"]`).click();
+      for (const tab of ['heroes','opponents']) {
+        await page.locator(`[data-tab="${tab}"]`).click();
         await open();
         assert.equal(await page.locator('[data-choice="actor"]').isVisible(), true, tab);
         assert.equal(await page.locator('[data-choice="actor"] [data-value="enemy"]').getAttribute('aria-pressed'), 'true');

@@ -17,3 +17,7 @@ backups/
 private-kompendium/
 config.local.js
 docs/*.pdf
+
+# Private travel atlas source PDFs and prepared images.
+maps/*.pdf
+private-travel-maps/

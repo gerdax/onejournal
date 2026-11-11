@@ -83,6 +83,27 @@ async function selectContents(page) {
     assert.equal(await page.locator('#notebook-open').evaluate(node => node === document.activeElement), true);
     await page.locator('#notebook-open').click();
     assert.match(await page.locator('#notebook-editor').innerText(), /Sekret wyprawy/);
+    const toolbarButton = await page.locator('[data-command=bold]').boundingBox();
+    const ruleButton = await page.locator('[data-command=horizontalRule]').boundingBox();
+    assert.equal(ruleButton.width, toolbarButton.width);
+    assert.equal(ruleButton.height, toolbarButton.height);
+    await page.locator('#notebook-editor').evaluate(node => {
+      node.focus(); const range = document.createRange(); range.selectNodeContents(node);
+      range.collapse(false); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    });
+    await page.locator('[data-command=horizontalRule]').click();
+    await page.waitForFunction(() => OneRingStore.notebook.document.blocks.some(block => block.type === 'horizontalRule'));
+    assert.equal(await page.locator('#notebook-editor hr').count(), 1);
+    await page.locator('#notebook-copy').click();
+    const ruleCopy = await page.evaluate(async () => {
+      const item = (await navigator.clipboard.read())[0];
+      return { text: await (await item.getType('text/plain')).text(), html: await (await item.getType('text/html')).text() };
+    });
+    assert.match(ruleCopy.text, /──────────/);
+    assert.match(ruleCopy.html, /<hr>/);
+    await page.getByRole('button', { name: 'Zamknij zapiski', exact: true }).click();
+    await page.locator('#notebook-open').click();
+    assert.equal(await page.locator('#notebook-editor hr').count(), 1);
     await player.page.evaluate(() => OneRingStore.refresh());
     assert.equal(await player.page.evaluate(() => JSON.stringify(OneRingStore.getState()).includes('Sekret wyprawy')), false);
     console.log('PASS: private GM notebook, dimensions, formatting, clipboard and focus');
@@ -111,6 +132,30 @@ async function selectContents(page) {
     await page.locator('[data-command=insertOrderedList]').click();
     await page.waitForFunction(() => OneRingStore.notebook.document.blocks.some(b => b.type === 'orderedList'));
     console.log('PASS: safe rich paste, native undo, keyboard shortcuts and numbered lists');
+
+    await page.locator('#notebook-editor').evaluate(node => {
+      node.innerHTML = '<ul><li><strong>Przed linią</strong> i po</li></ul>';
+      node.dispatchEvent(new Event('input', { bubbles: true }));
+      node.focus(); const range = document.createRange(); range.setStartAfter(node.querySelector('strong'));
+      range.collapse(true); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    });
+    await page.locator('[data-command=horizontalRule]').click();
+    await page.waitForFunction(() => JSON.stringify(OneRingStore.notebook.document).includes('Przed linią') &&
+      OneRingStore.notebook.document.blocks.some(block => block.type === 'horizontalRule'));
+    assert.deepEqual(fixture.document.notebook.blocks, [
+      { type: 'bulletList', items: [[{ text: 'Przed linią', bold: true }]] },
+      { type: 'horizontalRule' },
+      { type: 'bulletList', items: [[{ text: ' i po' }]] }
+    ]);
+    await page.locator('#notebook-editor').evaluate(node => {
+      node.innerHTML = '<ul><li><div>A</div><div>B</div><hr></li></ul>';
+      node.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForFunction(() => JSON.stringify(OneRingStore.notebook.document).includes('A\\nB') &&
+      OneRingStore.notebook.document.blocks.some(block => block.type === 'horizontalRule'));
+    assert.deepEqual(fixture.document.notebook.blocks, [
+      { type: 'bulletList', items: [[{ text: 'A\nB' }]] }, { type: 'horizontalRule' }
+    ]);
 
     // Invalid-sized input keeps the full draft available for editing/copying.
     const prior = await page.evaluate(() => OneRingStore.notebook);

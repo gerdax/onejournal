@@ -42,3 +42,27 @@ Odtwórz migracje w nowej bazie, ustaw oddzielne sekrety i nowy link MG, wgraj e
 Przed publikacją frontendu biblioteki map zastosuj migrację `202610020001_map_library.sql`, uruchom `node scripts/admin-build.mjs` i wdróż Edge Function. Nowy backend nadal obsługuje stare mapy generatora. Bucket `onejournal-maps` jest prywatny; tylko funkcja Edge odczytuje obrazy po sprawdzeniu dostępu. Gracze mogą pobrać wyłącznie obraz aktualnej potyczki.
 
 Usunięcie mapy z biblioteki nie usuwa aktywnego tła ani fizycznych obiektów Storage. Obrazy pozostają niezmienne; automatyczne czyszczenie nie jest częścią tej aktualizacji. Kopie gry obejmują bibliotekę oraz obraz aktywnej mapy, również po usunięciu wpisu z biblioteki. Sprawdź import wyłącznie na izolowanych danych.
+
+## Prywatne mapy podróży
+
+1. Zastosuj migrację `202610030003_travel_maps.sql`. Tworzy prywatny bucket
+   `onejournal-travel-maps` z dostępem wyłącznie przez service role.
+2. Umieść oryginały `JP_MAPA-ERIADORU.pdf` i `JP_MAPA-PODROZY.pdf` w lokalnym
+   `maps/` (ignorowane przez Git). Uruchom `node scripts/travel-maps.mjs prepare`.
+   Wymagany jest Poppler `pdftoppm` (opcjonalna ścieżka w `PDFTOPPM`).
+   Skrypt tworzy JPEG 4096 px / jakość 92 i manifest SHA-256 w ignorowanym
+   `private-travel-maps/`. Sprawdź czytelność nazw. Nie dodawaj tych plików do Gita.
+3. W zaufanym terminalu ustaw `SUPABASE_URL` i `SUPABASE_SERVICE_ROLE_KEY`,
+   następnie uruchom `node scripts/travel-maps.mjs upload`. Skrypt publikuje
+   najpierw oba obrazy z niezmiennymi nazwami opartymi na hashach, a na końcu
+   `manifest.json`. Nie umieszczaj klucza administracyjnego w konfiguracji frontendu.
+4. Uruchom `node scripts/admin-build.mjs`, wdróż Edge Function `onejournal`,
+   następnie zbuduj i opublikuj frontend standardową procedurą projektu.
+5. Sprawdź oba dostępy: MG otrzymuje mapę podróży, gracz Eriador. Ponowne otwarcie
+   wysyła `knownVersion` i otrzymuje `unchanged: true` bez bajtów obrazu.
+
+Aktualizacja map wymaga ponowienia przygotowania i uploadu. Stare obrazy nie są
+automatycznie usuwane. Mapy nie trafiają do `dist`, service workera ani kopii
+kampanii. Cache obejmuje tylko pamięć bieżącej karty; cofnięcie dostępu usuwa go
+po wykryciu przez aplikację. Przy chwilowym braku sieci już pobrany obraz pozostaje
+dostępny do zakończenia sesji.

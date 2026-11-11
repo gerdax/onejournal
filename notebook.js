@@ -56,22 +56,39 @@
     const visit = rootNode => { for (const node of rootNode.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) { inline(node, loose); continue; }
       if (node.nodeType !== Node.ELEMENT_NODE || skipTags.has(node.tagName)) continue;
-      if (node.tagName === 'UL' || node.tagName === 'OL') {
+      if (node.tagName === 'HR') {
+        flush(); blocks.push({ type: 'horizontalRule' });
+      } else if (node.tagName === 'UL' || node.tagName === 'OL') {
         flush();
-        const items = [];
+        const type = node.tagName === 'UL' ? 'bulletList' : 'orderedList';
+        let items = [];
+        const flushList = () => { if (items.length) { blocks.push({ type, items }); items = []; } };
         for (const child of node.children) {
           if (child.tagName !== 'LI') continue;
-          const runs = [];
-          inline(child, runs);
-          items.push(runs);
+          if (!Array.from(child.children).some(element => element.tagName === 'HR')) {
+            const runs = []; inline(child, runs); items.push(runs);
+            continue;
+          }
+          let runs = [];
+          for (const part of child.childNodes) {
+            if (part.nodeType === Node.ELEMENT_NODE && part.tagName === 'HR') {
+              if (runs.length) items.push(runs);
+              flushList(); blocks.push({ type: 'horizontalRule' }); runs = [];
+            } else {
+              if (part.nodeType === Node.ELEMENT_NODE && /^(P|DIV|UL|OL|LI|H[1-6]|BLOCKQUOTE|PRE)$/.test(part.tagName)
+                  && runs.length && !runs[runs.length - 1].text.endsWith('\n')) addRun(runs, '\n', {});
+              inline(part, runs);
+            }
+          }
+          if (runs.length) items.push(runs);
         }
-        if (items.length) blocks.push({ type: node.tagName === 'UL' ? 'bulletList' : 'orderedList', items });
+        flushList();
       } else if (/^(P|DIV|H[1-6]|BLOCKQUOTE|PRE|LI)$/.test(node.tagName)) {
         flush();
-        if (Array.from(node.children).some(child => /^(P|DIV|UL|OL|H[1-6]|BLOCKQUOTE|PRE)$/.test(child.tagName))) visit(node);
+        if (Array.from(node.children).some(child => /^(P|DIV|UL|OL|HR|H[1-6]|BLOCKQUOTE|PRE)$/.test(child.tagName))) visit(node);
         else { const runs = []; inline(node, runs); blocks.push({ type: 'paragraph', runs }); }
       } else {
-        if (Array.from(node.children).some(child => /^(P|DIV|UL|OL|H[1-6]|BLOCKQUOTE|PRE)$/.test(child.tagName))) { flush(); visit(node); }
+        if (Array.from(node.children).some(child => /^(P|DIV|UL|OL|HR|H[1-6]|BLOCKQUOTE|PRE)$/.test(child.tagName))) { flush(); visit(node); }
         else inline(node, loose);
       }
     } };
@@ -98,6 +115,8 @@
         const p = make('p'); renderRuns(p, block.runs);
         if (!p.childNodes.length) p.append(make('br'));
         target.append(p);
+      } else if (block.type === 'horizontalRule') {
+        target.append(make('hr'));
       } else if (block.type === 'bulletList' || block.type === 'orderedList') {
         const list = make(block.type === 'bulletList' ? 'ul' : 'ol');
         for (const runs of block.items || []) {
@@ -112,6 +131,7 @@
   function asText(documentValue) {
     return (documentValue.blocks || []).map(block => block.type === 'paragraph'
       ? (block.runs || []).map(run => run.text).join('')
+      : block.type === 'horizontalRule' ? '──────────'
       : (block.items || []).map((runs, i) => (block.type === 'bulletList' ? '• ' : `${i + 1}. `) + runs.map(run => run.text).join('')).join('\n')).join('\n');
   }
 
@@ -124,7 +144,8 @@
   const toolbar = make('div', null, 'notebook-toolbar'); toolbar.id = 'notebook-toolbar'; toolbar.setAttribute('role', 'toolbar'); toolbar.setAttribute('aria-label', 'Formatowanie');
   const commands = [
     ['bold', 'B', 'Pogrubienie'], ['italic', 'I', 'Kursywa'], ['underline', 'U', 'Podkreślenie'],
-    ['insertUnorderedList', '•', 'Lista punktowana'], ['insertOrderedList', '1.', 'Lista numerowana']
+    ['insertUnorderedList', '•', 'Lista punktowana'], ['insertOrderedList', '1.', 'Lista numerowana'],
+    ['horizontalRule', '―', 'Linia pozioma']
   ];
   for (const [command, label, title] of commands) {
     const control = button(label, 'notebook-' + command, title); control.dataset.command = command;
@@ -173,8 +194,9 @@
   function isDirty() { return revision !== savedRevision; }
   function setStatus(message) { status.textContent = message; }
   function isEmpty() {
-    return !(draft.blocks || []).some(block => (block.type === 'paragraph' ? [block.runs] : block.items || [])
-      .some(runs => (runs || []).some(run => (run.text || '').trim())));
+    return !(draft.blocks || []).some(block => block.type === 'horizontalRule' ||
+      (block.type === 'paragraph' ? [block.runs] : block.items || [])
+        .some(runs => (runs || []).some(run => (run.text || '').trim())));
   }
   function updateUI() {
     const writable = active && store.canWrite && !clearing && !conflictMode;
@@ -291,14 +313,18 @@
   toolbar.addEventListener('click', event => {
     const control = event.target.closest('[data-command]');
     if (!control || control.disabled) return;
-    editor.focus(); document.execCommand(control.dataset.command, false, null);
+    editor.focus();
+    if (control.dataset.command === 'horizontalRule') document.execCommand('insertHTML', false, '<hr>');
+    else document.execCommand(control.dataset.command, false, null);
     edited(); updateFormat();
   });
   function updateFormat() {
     if (!dialog.open || document.activeElement !== editor) return;
     for (const control of toolbar.querySelectorAll('[data-command]')) {
       let selected = false;
-      try { selected = document.queryCommandState(control.dataset.command); } catch (_) {}
+      if (control.dataset.command !== 'horizontalRule') {
+        try { selected = document.queryCommandState(control.dataset.command); } catch (_) {}
+      }
       control.setAttribute('aria-pressed', String(!!selected));
     }
   }

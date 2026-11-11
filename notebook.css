@@ -13,11 +13,13 @@
 .notebook-toolbar [data-command="bold"] { font-weight: bold; }
 .notebook-toolbar [data-command="italic"] { font-style: italic; }
 .notebook-toolbar [data-command="underline"] { text-decoration: underline; }
+.notebook-toolbar [data-command="horizontalRule"] { font-size: 20px; line-height: 1; }
 .notebook-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px 20px 40px; }
 .notebook-editor { min-height: 100%; outline: none; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .notebook-editor:empty::before { content: attr(data-placeholder); color: #746c5f; pointer-events: none; }
 .notebook-editor:focus-visible { outline: none; }
 .notebook-editor p { margin: 0 0 .7em; }
+.notebook-editor hr { border: 0; border-top: 1px solid #81745d; margin: .7em 0; }
 .notebook-editor ul, .notebook-editor ol { margin: 0 0 .7em; padding-left: 1.7em; }
 .notebook-conflict { padding: 12px; margin-top: 16px; border: 1px solid #9b2f20; border-radius: 6px; background: #fffaf0; }
 .notebook-conflict p { margin-top: 0; }

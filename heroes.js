@@ -33,8 +33,8 @@
   }
   if (typeof module !== "undefined" && module.exports) module.exports = { getResourceWarnings, updateResourceWarnings };
   const store = typeof window !== "undefined" && window.OneRingStore;
-  const host = typeof document !== "undefined" && document.getElementById("heroes"), battleList = typeof document !== "undefined" && document.getElementById("hero-battle-list");
-  if (!host || !battleList || !store) return;
+  const host = typeof document !== "undefined" && document.getElementById("heroes");
+  if (!host || !store) return;
   const fields = ["name", "culture", "strength", "heart", "wits", "strengthTN", "heartTN", "witsTN", "endurance", "maxEndurance", "hope", "maxHope", "shadow", "load", "fatigue", "parry", "armour", "weapons", "proficiencies", "stance", "conditions", "notes"];
   const numeric = new Set(["strength", "heart", "wits", "strengthTN", "heartTN", "witsTN", "endurance", "maxEndurance", "hope", "maxHope", "shadow", "load", "fatigue", "parry", "armour"]);
   const blankZeroGear = new Set(["armour", "armourLoad", "helmProtection", "helmLoad", "shieldParry", "shieldLoad"]);
@@ -182,7 +182,7 @@
               if (!name) { status(conflictStatus); return; }
               if (!validForm([name], editor)) { status("Popraw zaznaczone pole."); return; }
               const control = editor.elements[name];
-              const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim();
+              const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value;
               const sent = booleans.has(name) ? control.checked : control.value;
               saving = true; let succeeded = false; status("Zapisywanie…");
               try {
@@ -295,29 +295,9 @@
       const selected = hero.id === editingId; card.classList.toggle("is-editing", selected); card.textContent = hero.name || "Bez imienia"; card.setAttribute("aria-selected", String(selected)); card.tabIndex = selected ? 0 : -1;
     });
   }
-  function renderBattle() {
-    const participants = store.getParticipants().filter(p => p.type === "hero"); battleList.replaceChildren();
-    participants.filter(hero => !isPlayer() || hero.heroId === store.access?.heroId).forEach(hero => {
-      const card = el("article", "battle-card hero-battle-card" + (hero.defeated ? " defeated-card" : "")); card.dataset.id = hero.id;
-      const top = el("div", "card-top"), title = el("div"); title.append(el("p", "enemy-tier", hero.culture || "BOHATER"), el("h3", "enemy-name", hero.name || "Bez imienia"), el("p", "enemy-kind", `${hero.stance === "Ostrożna" ? "Defensywna" : hero.stance || "Wyważona"}${hero.conditions ? " · " + hero.conditions : ""}`));
-      const actions = el("div", "card-actions"); (isPlayer() ? [["Edytuj arkusz", "edit"]] : [["Edytuj arkusz", "edit"], ["×", "remove"]]).forEach(([label, action]) => { const b = el("button", action === "remove" ? "icon-button" : "text-button", label); b.type = "button"; b.dataset.heroAction = action; b.dataset.id = hero.id; b.title = action === "remove" ? "Usuń ze starcia" : "Edytuj arkusz"; actions.append(b); }); top.append(title, actions); card.append(top);
-      const meters = el("div", "combat-stats"); [["WYTRZYMAŁOŚĆ", "endurance", hero.maxEndurance], ["NADZIEJA", "hope", hero.maxHope]].forEach(([label, field, max]) => { const meter = el("div", "meter"), controls = el("div", "adjusters"); meter.append(el("p", "", label), el("strong", "", `${hero[field]}/${max}`)); [-5, -1, 1, 5].forEach(delta => { const b = el("button", "", (delta > 0 ? "+" : "") + delta); b.type = "button"; b.dataset.heroResource = field; b.dataset.change = delta; b.dataset.id = hero.id; controls.append(b); }); meter.append(controls); meters.append(meter); }); card.append(meters);
-      card.append(el("p", "detail", `Cień ${hero.shadow} · Obciążenie ${hero.load} · Znużenie ${hero.fatigue} · Obrona ${hero.parry} · Pancerz ${hero.armour}`));
-      const weapons = Array.from({ length: 4 }, (_, i) => { const name = hero[`weapon${i}Name`]; if (!name || hero[`weapon${i}Enabled`] === false) return ""; return name + [ ["obrażenia", "Damage"], ["przebicie", "Injury"] ].map(([label, key]) => hero[`weapon${i}${key}`] ? ` · ${label} ${hero[`weapon${i}${key}`]}` : "").join(""); }).filter(Boolean);
-      if (weapons.length) card.append(el("p", "detail", `Rynsztunek: ${weapons.join("; ")}`));
-      const ratings = [["Łuki", "combatBows"], ["Miecze", "combatSwords"], ["Topory", "combatAxes"], ["Włócznie", "combatSpears"]].filter(([, key]) => hero[key] > 0).map(([label, key]) => `${label} ${hero[key]}`);
-      if (ratings.length) card.append(el("p", "detail", `Biegłości: ${ratings.join(" · ")}`));
-      const conditions = [["Wyczerpanie", "weary"], ["Przygnębienie", "miserable"], ["Rana", "wounded"]].filter(([, key]) => hero[key]).map(([label]) => label);
-      if (conditions.length) card.append(el("p", "detail", conditions.join(" · ")));
-      if (hero.weapons) card.append(el("p", "detail", `Bronie: ${hero.weapons}`));
-      if (hero.proficiencies) card.append(el("p", "detail", `Biegłości bojowe: ${hero.proficiencies}`));
-      if (!isPlayer()) { const defeated = el("button", "defeated", hero.defeated ? "Przywróć do walki" : "Oznacz jako pokonanego"); defeated.type = "button"; defeated.dataset.heroAction = "defeated"; defeated.dataset.id = hero.id; card.append(defeated); } battleList.append(card);
-    });
-  }
-  function render() { const layout = host.querySelector(".heroes-layout"), priorError = host.querySelector(".hero-error"); if (store.loadError) { layout.hidden = true; if (!priorError) host.querySelector(".hero-heading").append(el("p", "hero-error", "Nie można odczytać zapisanych danych bohaterów. Przywróć poprawną pełną kopię.")); return; } layout.hidden = false; if (priorError) priorError.remove(); syncEditor(); renderList(); syncHeader(); renderBattle(); if (draftDirty && canSave() && !savingField && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(200); }
+  function render() { const layout = host.querySelector(".heroes-layout"), priorError = host.querySelector(".hero-error"); if (store.loadError) { layout.hidden = true; if (!priorError) host.querySelector(".hero-heading").append(el("p", "hero-error", "Nie można odczytać zapisanych danych bohaterów. Przywróć poprawną pełną kopię.")); return; } layout.hidden = false; if (priorError) priorError.remove(); syncEditor(); renderList(); syncHeader(); if (draftDirty && canSave() && !savingField && [...dirtyFields].some(field => !conflictFields.has(field))) scheduleSave(200); }
   host.addEventListener("click", async event => { const button = event.target.closest("[data-hero-action]"); if (!button) return; const { heroAction: action, id } = button.dataset; if (action === "new") return createHero(); if (action === "edit") { if (isPlayer() && id !== store.access?.heroId) return; if (!mayDiscard()) return; edit(id); return; } if (isPlayer() || !canSave()) { status("Brak uprawnień lub połączenia."); return; } try { if (action === "battle") { const inBattle = store.getState().heroParticipants.some(p => p.heroId === id); if (inBattle) { if (confirm("Usunąć bohatera z potyczki? Arkusz bohatera zostanie zachowany.")) await store.removeParticipant("hero:" + id); } else await store.addHero(id); } else if (action === "delete" && confirm("Usunąć bohatera oraz jego udział w walce?")) { const heroes = store.getState().heroes, index = heroes.findIndex(hero => hero.id === id), next = heroes[index + 1] || heroes[index - 1]; await store.deleteHero(id); if (editingId === id) { editingId = next ? next.id : null; draftDirty = false; dirtyFields.clear(); if (editingId) edit(editingId); } } } catch (error) { status(saveError(error)); } });
   list.addEventListener("keydown", event => { const tabs = [...listCards.values()]; if (!tabs.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const current = tabs.indexOf(event.target.closest('[role="tab"]')); let index = current; if (event.key === "Home") index = 0; else if (event.key === "End") index = tabs.length - 1; else index = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; const target = tabs[index]; if (target && mayDiscard()) { edit(target.dataset.id); target.focus(); } });
-  battleList.addEventListener("click", async event => { const button = event.target.closest("button"); if (!button) return; const id = button.dataset.id; if (button.dataset.heroAction === "edit") { if (!mayDiscard()) return; document.querySelector('[data-tab="heroes"]').click(); edit(id.replace(/^hero:/, "")); return; } if (isPlayer() || !canSave()) return; try { if (button.dataset.heroResource) await store.adjustResource(id, button.dataset.heroResource, Number(button.dataset.change)); else if (button.dataset.heroAction === "remove") await store.removeParticipant(id); else if (button.dataset.heroAction === "defeated") await store.toggleDefeated(id); } catch (error) { status(saveError(error)); } });
   let savingField = false, saveTimer = null;
   function scheduleSave(delay = 500) { clearTimeout(saveTimer); saveTimer = setTimeout(saveField, delay); }
   function changedField(event) {
@@ -338,7 +318,7 @@
     if (!name) { status(conflictStatus); return; }
     if (!validForm([name])) { status("Popraw zaznaczone pole."); return; }
     const id = editingId, control = form.elements[name];
-    const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value.trim();
+    const value = booleans.has(name) ? control.checked : numeric.has(name) ? Number(control.value) : control.value;
     const sent = booleans.has(name) ? control.checked : control.value;
     savingField = true; let succeeded = false; status("Zapisywanie…");
     try {

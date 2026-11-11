@@ -6,18 +6,19 @@
 })(typeof window === 'undefined' ? null : window, function () {
   'use strict';
   const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
-  const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'setEnemyWeary', 'setEnemyNotes', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'removeMap', 'loadMap', 'restoreBackup', 'selectToken'];
+  const mutations = ['addEnemy', 'removeParticipant', 'clearBattle', 'clearEncounter', 'toggleDefeated', 'setEnemyWound', 'setEnemyWeary', 'setEnemyNotes', 'adjustResource', 'reorderEnemies', 'saveHero', 'deleteHero', 'addHero', 'setMap', 'moveToken', 'addLibrary', 'removeLibrary', 'importLibrary', 'removeMap', 'setMapFavorite', 'loadMap', 'restoreBackup', 'selectToken'];
   function createStore(transport) {
-    let snapshot = null, connection = 'connecting', listeners = new Set(), tail = Promise.resolve(), refreshing, stopped = false, epoch = 0;
+    let snapshot = null, connection = 'connecting', listeners = new Set(), tail = Promise.resolve(), refreshing, stopped = false, epoch = 0, travelMapCache = null, travelMapReading = null;
     const empty = { version: 2, library: [], battle: [], heroes: [], heroParticipants: [], mapLibrary: [], map: null };
     function emit() { for (const fn of listeners) { try { fn(store.getState()); } catch (error) { console.error('State observer failed', error); } } }
     function accept(data) {
       if (!data || !data.state || !data.access) throw new Error('Nieprawidłowa odpowiedź serwera.');
+      if (snapshot && (snapshot.access.role !== data.access.role || snapshot.access.heroId !== data.access.heroId)) { epoch++; travelMapCache = null; travelMapReading = null; snapshot = null; }
       if (!snapshot || Number(data.revision) >= Number(snapshot.revision)) snapshot = clone(data);
       connection = 'online'; emit();
     }
     function failed(error) {
-      if (error.status === 401 || error.status === 403) { epoch++; snapshot = null; connection = 'revoked'; transport.stop?.(); }
+      if (error.status === 401 || error.status === 403) { epoch++; snapshot = null; travelMapCache = null; travelMapReading = null; connection = 'revoked'; transport.stop?.(); }
       else if (!error.status || error.status >= 500) connection = 'offline';
       emit();
     }
@@ -64,7 +65,7 @@
       getParticipants() { return clone(snapshot?.participants || []); },
       subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
       async connect(secret) {
-        epoch++; stopped = false; connection = 'connecting'; emit();
+        epoch++; stopped = false; snapshot = null; travelMapCache = null; travelMapReading = null; connection = 'connecting'; emit();
         const response = await request(secret ? { action: 'exchange', secret } : { action: 'snapshot' });
         // Opening a new link may deliberately switch role and reset revisions.
         snapshot = null; accept(response);
@@ -76,12 +77,35 @@
         if (!refreshing) refreshing = request({ action: 'snapshot' }).then(accept).finally(() => { refreshing = null; });
         return refreshing;
       },
-      markOffline() { if (connection !== 'revoked') { epoch++; connection = 'offline'; emit(); } },
-      stop() { epoch++; stopped = true; transport.stop?.(); connection = 'offline'; emit(); },
+      markOffline() { if (connection !== 'revoked') { epoch++; travelMapReading = null; connection = 'offline'; emit(); } },
+      stop() { epoch++; stopped = true; travelMapCache = null; travelMapReading = null; transport.stop?.(); connection = 'offline'; emit(); },
       exportBackup() { return enqueue({ action: 'export' }); },
       getAvatar(heroId) { return enqueue({ action: 'avatarGet', heroId }); },
       uploadMap({ id, name, dataUrl, thumbnailDataUrl }) {
         return enqueue({ action: 'mapUpload', id, name, dataUrl, thumbnailDataUrl }, true).then(response => clone(response.result));
+      },
+      getCachedTravelMap() { return clone(travelMapCache); },
+      getTravelMap() {
+        if (stopped || !snapshot || !['online', 'offline'].includes(connection)) return Promise.reject(new Error('Brak aktywnej sesji. Zaczekaj na synchronizację.'));
+        if (connection === 'offline' && travelMapCache) return Promise.resolve(clone(travelMapCache));
+        if (travelMapReading) return travelMapReading.then(clone);
+        const readEpoch = epoch;
+        const cached = travelMapCache;
+        const mapId = snapshot.access.role === 'gm' ? 'podrozy' : 'eriador';
+        const reading = request({ action: 'travelMapGet', ...(cached ? { knownVersion: cached.version } : {}) }).then(response => {
+          if (epoch !== readEpoch || stopped) throw staleSession();
+          if (!response || response.mapId !== mapId || typeof response.version !== 'string' || !/^[a-f0-9]{64}$/.test(response.version)) throw new Error('Nieprawidłowa odpowiedź mapy podróży.');
+          if (response.unchanged === true) {
+            if (!cached || cached.mapId !== response.mapId || cached.version !== response.version) throw new Error('Brakuje zapisanej mapy podróży.');
+            travelMapCache = cached;
+          } else {
+            if (typeof response.dataUrl !== 'string' || !response.dataUrl.startsWith('data:image/jpeg;base64,')) throw new Error('Nieprawidłowy obraz mapy podróży.');
+            travelMapCache = { mapId: response.mapId, version: response.version, dataUrl: response.dataUrl };
+          }
+          return clone(travelMapCache);
+        }).finally(() => { if (travelMapReading === reading) travelMapReading = null; });
+        travelMapReading = reading;
+        return reading;
       },
       getMapImage(imageId) { return enqueue({ action: 'mapGet', imageId }); },
       setAvatar(heroId, dataUrl, heroVersion) {

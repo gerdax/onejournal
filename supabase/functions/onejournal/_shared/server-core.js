@@ -4,7 +4,7 @@
 const { createStore, normalizeNotebook } = typeof require === "function" ? require("./state.js") : globalThis.OneRingState;
 const DiceRules = typeof require === "function" ? require("./dice-rules.js") : globalThis.DiceRules;
 const MAX_ROLLS = 10000;
-const GM_METHODS = new Set(["addEnemy", "removeParticipant", "clearBattle", "clearEncounter", "toggleDefeated", "setEnemyWound", "setEnemyWeary", "setEnemyNotes", "adjustResource", "reorderEnemies", "addLibrary", "removeLibrary", "importLibrary", "saveHero", "deleteHero", "addHero", "setMap", "moveToken", "removeMap", "loadMap", "restoreBackup", "selectToken"]);
+const GM_METHODS = new Set(["addEnemy", "removeParticipant", "clearBattle", "clearEncounter", "toggleDefeated", "setEnemyWound", "setEnemyWeary", "setEnemyNotes", "adjustResource", "reorderEnemies", "addLibrary", "removeLibrary", "importLibrary", "saveHero", "deleteHero", "addHero", "setMap", "moveToken", "removeMap", "setMapFavorite", "loadMap", "restoreBackup", "selectToken"]);
 const own = (x, key) => Object.prototype.hasOwnProperty.call(x, key);
 const clone = x => JSON.parse(JSON.stringify(x));
 const fail = (status, message) => { const error = new Error(message); error.status = status; throw error; };
@@ -167,6 +167,7 @@ function validateMethodInput(method, args, access, doc, heroVersion) {
     if (Object.keys(args[0]).some(key => key !== "id" && (key === "defeated" || (!own(assigned, key) && !/^(weapon[0-3]|helm|shield)Enabled$/.test(key))))) fail(403, "To pole może zmieniać tylko mistrz gry.");
   }
   if (["addEnemy", "addLibrary"].includes(method) && args[0]?.might != null && (!finiteInt(args[0].might) || args[0].might > 5)) fail(400, "Potęga musi wynosić od 0 do 5.");
+  if (method === "setMapFavorite" && (args.length !== 2 || typeof args[0] !== "string" || typeof args[1] !== "boolean")) fail(400, "Nieprawidłowe ulubione scenerie.");
   if (method === "setEnemyNotes") {
     if (args.length !== 3 || args.some(value => typeof value !== "string")) fail(400, "Nieprawidłowe notatki przeciwnika.");
     const enemy = doc.state.battle.find(e => e.id === args[0]);
@@ -187,7 +188,7 @@ function validateMethodInput(method, args, access, doc, heroVersion) {
   }
   if (method === "restoreBackup" && access.role !== "gm") fail(403, "Brak uprawnień.");
 }
-function createServerCore({ repository, avatarStorage = { get: async () => null, put: async () => { throw new Error("Avatar storage unavailable"); } }, mapStorage = { get: async () => null, put: async () => { throw new Error("Map storage unavailable"); } }, hashSecret, randomSecret, encryptSecret, decryptSecret, catalog = [], now = () => new Date().toISOString() }) {
+function createServerCore({ repository, avatarStorage = { get: async () => null, put: async () => { throw new Error("Avatar storage unavailable"); } }, mapStorage = { get: async () => null, put: async () => { throw new Error("Map storage unavailable"); } }, travelMapStorage = { getManifest: async () => null, get: async () => null }, hashSecret, randomSecret, encryptSecret, decryptSecret, catalog = [], now = () => new Date().toISOString() }) {
   if (!repository || !hashSecret || !randomSecret || !encryptSecret || !decryptSecret) throw new Error("Missing server dependency");
   async function verifyMapReferences(raw) {
     const checked = createStore(storageFor(raw));
@@ -384,7 +385,7 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
             doc.grants = doc.grants.filter(g => g.role === "gm" || ids.has(g.heroId));
           }
           if (request.method === "deleteHero") delete doc.heroVersions[request.args[0]];
-          publicChange = !["addLibrary", "removeLibrary", "importLibrary", "removeMap", "setEnemyWound", "setEnemyWeary", "setEnemyNotes"].includes(request.method);
+          publicChange = !["addLibrary", "removeLibrary", "importLibrary", "removeMap", "setMapFavorite", "setEnemyWound", "setEnemyWeary", "setEnemyNotes"].includes(request.method);
           if (request.method === "setEnemyWound") {
             const before = oldState.battle.find(enemy => enemy.id === request.args[0]);
             const after = doc.state.battle.find(enemy => enemy.id === request.args[0]);
@@ -477,6 +478,36 @@ function createServerCore({ repository, avatarStorage = { get: async () => null,
   return { defaultDocument, snapshot, handle(uid, request) {
     if (typeof uid !== "string" || !uid || !isObject(request)) fail(400, "Nieprawidłowe żądanie.");
     if (["snapshot", "export", "links"].includes(request.action)) return read(uid, request.action);
+    if (request.action === "travelMapGet") return (async () => {
+      const doc = await repository.get();
+      const access = accessFor(doc, uid);
+      const grant = doc.grants.find(g => g.uid === uid && g.active);
+      const mapId = access.role === "gm" ? "podrozy" : "eriador";
+      if (own(request, "knownVersion") && (typeof request.knownVersion !== "string" || !/^[a-f0-9]{64}$/.test(request.knownVersion))) fail(400, "Nieprawidłowa wersja mapy podróży.");
+      const manifest = await travelMapStorage.getManifest();
+      const entry = manifest?.maps?.[mapId];
+      if (!isObject(entry) || typeof entry.version !== "string" || !/^[a-f0-9]{64}$/.test(entry.version) || entry.path !== `${mapId}-${entry.version}.jpg`) fail(500, "Brakuje mapy podróży.");
+      let dataUrl;
+      if (request.knownVersion !== entry.version) {
+        dataUrl = await travelMapStorage.get(entry.path);
+        const maxBytes = 20 * 1024 * 1024;
+        if (typeof dataUrl !== "string" || dataUrl.length > 23 + 4 * Math.ceil(maxBytes / 3) || !dataUrl.startsWith("data:image/jpeg;base64,")) fail(500, "Nieprawidłowy obraz mapy podróży.");
+        const encoded = dataUrl.slice(23);
+        // A repeated four-character regex over multi-megabyte maps can exhaust the JS stack.
+        if (encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) fail(500, "Nieprawidłowy obraz mapy podróży.");
+        let binary;
+        try { binary = atob(encoded); } catch { fail(500, "Nieprawidłowy obraz mapy podróży."); }
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        if (bytes.length > maxBytes || bytes.length < 4 || bytes[0] !== 255 || bytes[1] !== 216 || bytes[bytes.length - 2] !== 255 || bytes[bytes.length - 1] !== 217 || hashSecret(bytes) !== entry.version) fail(500, "Nieprawidłowy obraz mapy podróży.");
+      }
+      // Never release private bytes (or confirm their version) to a changed grant.
+      const current = await repository.get();
+      accessFor(current, uid);
+      const currentGrant = current.grants.find(g => g.uid === uid && g.active);
+      if (currentGrant.linkId !== grant.linkId || currentGrant.version !== grant.version || currentGrant.role !== grant.role || currentGrant.heroId !== grant.heroId) fail(403, "Dostęp zmienił się podczas odczytu mapy.");
+      return dataUrl ? { mapId, version: entry.version, dataUrl } : { mapId, version: entry.version, unchanged: true };
+    })();
     if (["avatarGet", "avatarStage", "mapGet", "mapStage"].includes(request.action)) return (async () => {
       const doc = await repository.get();
       const access = accessFor(doc, uid);
